@@ -54,12 +54,13 @@ class BattleshipsEnv:
 
     # Process shot
 
-    def process_shot():
+    def process_shot(self, row: int, col: int, shot_type: str):
         pass
 
     # Reward calculation
 
     def find_hit_adjacent_positions(self) -> Set[Tuple[int, int]]:
+        """ Returns a set of positions adjacent to a hit for reward calculation and state set-up. """
         hit_adjacent_positions = set()
         for hit in self.hits:
             row, col = hit[0], hit[1]
@@ -69,12 +70,34 @@ class BattleshipsEnv:
         return hit_adjacent_positions
 
     def find_hit_inline_positions(self) -> Set[Tuple[int, int]]:
+        """ Returns a set of hit inline positions for reward calculation and state set-up. """
         hit_inline_positions = set()
         # Return empty set if there are not yet two or more hits to line up.
         if len(self.hits < 2):
             return hit_inline_positions
-        #Find direction/
+        # Find direction.
         row1, col1 = self.hits[0][0], self.hits[0][1]
         row2, col2 = self.hits[1][0], self.hits[1][1]
         is_horizontal = row1 == row2
+        if not is_horizontal and col1 != col2:
+            raise ValueError(f'The current hits are not in line. ({row1}, {col1}) and ({row2}, {col2})')
+        # Add inline positions to set.
+        if is_horizontal:
+            row = row1
+            cols = [hit[1] for hit in self.hits]
+            # Track along the row. Ignore hit cells. Add hit-adjacent, inline cells.
+            for i in range(self.GRID_SIZE):
+                if i in cols:
+                    continue
+                if (i - 1) in cols or (i + 1) in cols:
+                    hit_inline_positions.add((row, i))
+        else:
+            col = col1
+            rows = [hit[0] for hit in self.hits]
+            # Track down the column. Ignore hit cells. Add hit-adjacent, inline cells.
+            for i in range(self.GRID_SIZE):
+                if i in rows:
+                    continue
+                if (i - 1) in rows or (i + 1) in rows:
+                    hit_inline_positions.add((i, col))
         return hit_inline_positions
