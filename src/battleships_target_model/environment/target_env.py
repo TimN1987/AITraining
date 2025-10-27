@@ -4,7 +4,7 @@ from typing import List, Tuple, Set
 
 class BattleshipsEnv:
 
-    def __init__(self, airstrike_enabled, bombardment_enabled):
+    def __init__(self, ai_player, airstrike_enabled: bool, bombardment_enabled: bool):
         # Constants
         self.REWARD_WEIGHTS = {
             'hit_adjacent_shot': 1.0,
@@ -13,51 +13,151 @@ class BattleshipsEnv:
             'invalid': -10.0
         }
         self.ADJACENT_DELTAS = [-1, 1]
+        self.AIRSTRIKE_UP_RIGHT_DELTAS = [(-1, 1), (-2, 2)]
+        self.AIRSTRIKE_DOWN_RIGHT_DELTAS = [(1, 1), (2, 2)]
+        self.BOMBARDMENT_DELTAS = [(-1, 0), (0, -1), (1, 0), (0, 1)]
         self.EMPTY = 0
         self.SHIP = 1
         self.MISS = -1
         self.HIT = 2
+        self.SUNK = 3
         self.GRID_SIZE = 10
         self.AIRSTRIKE_ENABLED = airstrike_enabled
         self.BOMBARDMENT_ENABLED = bombardment_enabled
 
         self.rnd = random.Random()
-        self.grid = np.zeros(self.GRID_SIZE, self.GRID_SIZE)
+        self.player = ai_player
+        self.airstrike_available = airstrike_enabled
+        self.bombardment_available = bombardment_enabled
+        self.grid = np.zeros((self.GRID_SIZE, self.GRID_SIZE), dtype=int)
+        self.ship_size = self.rnd.randint(2, 5)
+        self.is_horizontal = self.rnd.choice([True, False])
+        self.place_ship()
         self.hits = []
+
+    def reset(self):
+        """ Resets the grid ready for a new game. """
+        self.grid = np.zeros((self.GRID_SIZE, self.GRID_SIZE), dtype=int)
+        self.ship_size = self.rnd.randint(2, 5)
+        self.is_horizontal = self.rnd.choice([True, False])
+        self.place_ship()
+        self.hits.clear()
 
     # Set up grid
 
     def place_ship(self) -> None:
         """ Places a randomly generated ship on the grid to be targeted. """
-        ship_size = self.rnd.randint(2, 5)
-        is_horizontal = self.rnd.choice(True, False)
-        limit = self.GRID_SIZE - ship_size
-        row = self.rnd.randint(0, limit) if is_horizontal else self.rnd.randint(0, 9)
-        col = self.rnd.randint(0, 9) if is_horizontal else self.rnd.randint(0, limit)
-        for i in range(ship_size):
-            if is_horizontal:
-                self.grid[row + i][col] = self.SHIP
-            else:
+        limit = self.GRID_SIZE - self.ship_size
+        row = self.rnd.randint(0, limit) if self.is_horizontal else self.rnd.randint(0, 9)
+        col = self.rnd.randint(0, 9) if self.is_horizontal else self.rnd.randint(0, limit)
+        for i in range(self.ship_size):
+            if self.is_horizontal:
                 self.grid[row][col + i] = self.SHIP
-        self.set_hit_as_target(row, col, is_horizontal, ship_size)
-        
+            else:
+                self.grid[row + i][col] = self.SHIP
+        self.set_hit_as_target(row, col)  
 
-    def set_hit_as_target(self, row: int, col: int, is_horizontal: bool, ship_size: int) -> None:
+    def set_hit_as_target(self, row: int, col: int) -> None:
         """ Sets a hit on the given ship to be targeted. """
-        target_delta = self.rnd.randrange(0, ship_size)
-        if is_horizontal:
+        target_delta = self.rnd.randrange(0, self.ship_size)
+        if self.is_horizontal:
             row += target_delta
         else:
             col += target_delta
         self.grid[row][col] = self.HIT
         self.hits.append((row, col))
 
+    def add_random_misses(self):
+        miss_count = self.rnd.randint(5, 20)
+        empty_cells = np.argwhere(self.grid == self.EMPTY)
+        empty_positions = [tuple(pos) for pos in empty_cells]
+        misses = self.rnd.sample(empty_positions, miss_count)
+        for row, col in misses:
+            self.grid[row, col] = self.MISS
+
+    def add_random_sinkings(self):
+        sinkings_count = self.rnd.randint(0, 5)
+        empty_cells = np.argwhere(self.grid == self.EMPTY)
+        empty_positions = [tuple(pos) for pos in empty_cells]
+        sinkings = self.rnd.sample(empty_positions, sinkings_count)
+        for row, col in sinkings:
+            self.grid[row, col] = self.SUNK
+
+    # Run game
+
+    def run_episode(self):
+        """ Runs an episode of targeting a ship. Returns the episode history. """
+        episode_history = []
+        done = False
+        next_state = self.player.get_state() #update after RLPlayer class created
+        while not done:
+            state = next_state
+            row, col, shot_type = self.player.choose_action() # update after RLPlyaer class created
+            reward = self.process_shot(row, col, shot_type)
+            done = len(self.hits) == self.ship_size
+            next_state = self.player.get_state()
+            episode_history.append({
+                'state': state,
+                'action': (row, col),
+                'shot_type': shot_type,
+                'reward': reward,
+                'next_state': next_state,
+                'done': done
+            })
+        return episode_history
+
     # Process shot
 
-    def process_shot(self, row: int, col: int, shot_type: str):
-        pass
+    def process_shot(self, row: int, col: int, shot_type: str) -> int:
+        """ Marks the outcome of a shot on the grid and returns the correct reward. """
+        positions = self.find_all_shot_positions(row, col, shot_type)
+        for (row, col) in positions:
+            if self.grid[row, col] == self.SHIP:
+                self.grid[row, col] = self.HIT
+                self.hits.append((row, col))
+            elif self.grid[row, col] == self.EMPTY:
+                self.grid[row, col] = self.MISS
+        reward = self.calculate_reward(positions)
+        return reward
+
+    def find_all_shot_positions(self, row: int, col: int, shot_type: str) -> List[Tuple[int, int]]:
+        """ Returns a list of all positions hit by the given shot position and type. """
+        positions = [(row, col)]
+        if shot_type == 'single':
+            return positions
+        if shot_type == 'airstrike_up_right':
+            deltas = self.AIRSTRIKE_UP_RIGHT_DELTAS
+        elif shot_type == 'airstrike_down_right':
+            deltas = self.AIRSTRIKE_DOWN_RIGHT_DELTAS
+        elif shot_type == 'bombardment':
+            deltas = self.BOMBARDMENT_DELTAS
+        for row_delta, col_delta in deltas:
+            positions.append((row + row_delta, col + col_delta))
+        return positions
 
     # Reward calculation
+
+    def calculate_reward(self, positions: List[Tuple[int, int]]) -> int:
+        """ Calculates the total reward for a turn based on the shot selection relative to known hits. """
+        hit_inline_positions = self.find_hit_inline_positions()
+        hit_adjacent_positions = self.find_hit_adjacent_positions()
+        hit_inline_count = 0
+        hit_adjacent_count = 0
+        untargeted_count = 0
+        for row, col in positions:
+            if self.grid[row, col] != self.EMPTY:
+                return self.REWARD_WEIGHTS['invalid']
+            if (row, col) in hit_inline_positions:
+                hit_inline_count += 1
+            elif (row, col) in hit_adjacent_positions:
+                hit_adjacent_count += 1
+            else:
+                untargeted_count += 1
+        if hit_inline_count > 0:
+            return self.REWARD_WEIGHTS['hit_inline_shot'] * hit_inline_count
+        if hit_adjacent_count > 0:
+            return self.REWARD_WEIGHTS['hit_adjacent_shot'] * hit_adjacent_count
+        return self.REWARD_WEIGHTS['untargeted_shot'] * untargeted_count
 
     def find_hit_adjacent_positions(self) -> Set[Tuple[int, int]]:
         """ Returns a set of positions adjacent to a hit for reward calculation and state set-up. """
@@ -73,17 +173,11 @@ class BattleshipsEnv:
         """ Returns a set of hit inline positions for reward calculation and state set-up. """
         hit_inline_positions = set()
         # Return empty set if there are not yet two or more hits to line up.
-        if len(self.hits < 2):
+        if len(self.hits) < 2:
             return hit_inline_positions
-        # Find direction.
-        row1, col1 = self.hits[0][0], self.hits[0][1]
-        row2, col2 = self.hits[1][0], self.hits[1][1]
-        is_horizontal = row1 == row2
-        if not is_horizontal and col1 != col2:
-            raise ValueError(f'The current hits are not in line. ({row1}, {col1}) and ({row2}, {col2})')
         # Add inline positions to set.
-        if is_horizontal:
-            row = row1
+        if self.is_horizontal:
+            row = self.hits[0][0]
             cols = [hit[1] for hit in self.hits]
             # Track along the row. Ignore hit cells. Add hit-adjacent, inline cells.
             for i in range(self.GRID_SIZE):
@@ -92,7 +186,7 @@ class BattleshipsEnv:
                 if (i - 1) in cols or (i + 1) in cols:
                     hit_inline_positions.add((row, i))
         else:
-            col = col1
+            col = self.hits[0][1]
             rows = [hit[0] for hit in self.hits]
             # Track down the column. Ignore hit cells. Add hit-adjacent, inline cells.
             for i in range(self.GRID_SIZE):
