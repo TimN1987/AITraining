@@ -25,31 +25,38 @@ class BattleshipsEnv:
         self.AIRSTRIKE_ENABLED = airstrike_enabled
         self.BOMBARDMENT_ENABLED = bombardment_enabled
 
-        self.rnd = random.Random()
+        # Set environment conditions
         self.player = ai_player
         self.airstrike_available = airstrike_enabled
         self.bombardment_available = bombardment_enabled
-        self.grid = np.zeros((self.GRID_SIZE, self.GRID_SIZE), dtype=int)
+        self.rnd = random.Random()
         self.ship_size = self.rnd.randint(2, 5)
         self.is_horizontal = self.rnd.choice([True, False])
-        self.place_ship()
+        
+        # Set up game grid and records
         self.hits = []
+        self.grid = np.zeros((self.GRID_SIZE, self.GRID_SIZE), dtype=int)
+        self.place_ship()
+        self.add_random_misses()
+        self.add_random_sinkings()
 
     def reset(self):
         """ Resets the grid ready for a new game. """
+        self.hits.clear()
         self.grid = np.zeros((self.GRID_SIZE, self.GRID_SIZE), dtype=int)
         self.ship_size = self.rnd.randint(2, 5)
         self.is_horizontal = self.rnd.choice([True, False])
         self.place_ship()
-        self.hits.clear()
+        self.add_random_misses()
+        self.add_random_sinkings()
 
     # Set up grid
 
     def place_ship(self) -> None:
         """ Places a randomly generated ship on the grid to be targeted. """
         limit = self.GRID_SIZE - self.ship_size
-        row = self.rnd.randint(0, limit) if self.is_horizontal else self.rnd.randint(0, 9)
-        col = self.rnd.randint(0, 9) if self.is_horizontal else self.rnd.randint(0, limit)
+        row = self.rnd.randint(0, 9) if self.is_horizontal else self.rnd.randint(0, limit)
+        col = self.rnd.randint(0, limit) if self.is_horizontal else self.rnd.randint(0, 9)
         for i in range(self.ship_size):
             if self.is_horizontal:
                 self.grid[row][col + i] = self.SHIP
@@ -61,9 +68,9 @@ class BattleshipsEnv:
         """ Sets a hit on the given ship to be targeted. """
         target_delta = self.rnd.randrange(0, self.ship_size)
         if self.is_horizontal:
-            row += target_delta
-        else:
             col += target_delta
+        else:
+            row += target_delta
         self.grid[row][col] = self.HIT
         self.hits.append((row, col))
 
@@ -111,13 +118,13 @@ class BattleshipsEnv:
     def process_shot(self, row: int, col: int, shot_type: str) -> int:
         """ Marks the outcome of a shot on the grid and returns the correct reward. """
         positions = self.find_all_shot_positions(row, col, shot_type)
+        reward = self.calculate_reward(positions)
         for (row, col) in positions:
             if self.grid[row, col] == self.SHIP:
                 self.grid[row, col] = self.HIT
                 self.hits.append((row, col))
             elif self.grid[row, col] == self.EMPTY:
                 self.grid[row, col] = self.MISS
-        reward = self.calculate_reward(positions)
         return reward
 
     def find_all_shot_positions(self, row: int, col: int, shot_type: str) -> List[Tuple[int, int]]:
