@@ -75,6 +75,7 @@ class BattleshipsEnv:
         self.hits.append((row, col))
 
     def add_random_misses(self):
+        """ Sets a random number of grid cells to miss to simulate previous shots. """
         miss_count = self.rnd.randint(5, 20)
         empty_cells = np.argwhere(self.grid == self.EMPTY)
         empty_positions = [tuple(pos) for pos in empty_cells]
@@ -83,6 +84,7 @@ class BattleshipsEnv:
             self.grid[row, col] = self.MISS
 
     def add_random_sinkings(self):
+        """ Sets a random number of grid cells to sunk to simulate previous sinkings. """
         sinkings_count = self.rnd.randint(0, 5)
         empty_cells = np.argwhere(self.grid == self.EMPTY)
         empty_positions = [tuple(pos) for pos in empty_cells]
@@ -100,6 +102,10 @@ class BattleshipsEnv:
         while not done:
             state = next_state
             row, col, shot_type = self.player.choose_action() # update after RLPlyaer class created
+            if shot_type == 'airstrike_up_right' or shot_type == 'airstrike_down_right':
+                self.airstrike_available = False
+            elif shot_type == 'bombardment':
+                self.bombardment_available = False
             reward = self.process_shot(row, col, shot_type)
             done = len(self.hits) == self.ship_size
             next_state = self.player.get_state()
@@ -118,8 +124,10 @@ class BattleshipsEnv:
     def process_shot(self, row: int, col: int, shot_type: str) -> int:
         """ Marks the outcome of a shot on the grid and returns the correct reward. """
         positions = self.find_all_shot_positions(row, col, shot_type)
+        if self.is_out_of_bounds(positions):
+            return self.REWARD_WEIGHTS['invalid']
         reward = self.calculate_reward(positions)
-        for (row, col) in positions:
+        for row, col in positions:
             if self.grid[row, col] == self.SHIP:
                 self.grid[row, col] = self.HIT
                 self.hits.append((row, col))
@@ -141,6 +149,13 @@ class BattleshipsEnv:
         for row_delta, col_delta in deltas:
             positions.append((row + row_delta, col + col_delta))
         return positions
+    
+    def is_out_of_bounds(self, positions: List[Tuple[int, int]]) -> bool:
+        """ Checks if any from a list of shot positions is outside the grid. """
+        for row, col in positions:
+            if row in range(self.GRID_SIZE) and col in range(self.GRID_SIZE):
+                return False
+        return True
 
     # Reward calculation
 
@@ -152,7 +167,7 @@ class BattleshipsEnv:
         hit_adjacent_count = 0
         untargeted_count = 0
         for row, col in positions:
-            if self.grid[row, col] != self.EMPTY:
+            if self.grid[row, col] not in [self.EMPTY, self.SHIP]:
                 return self.REWARD_WEIGHTS['invalid']
             if (row, col) in hit_inline_positions:
                 hit_inline_count += 1
