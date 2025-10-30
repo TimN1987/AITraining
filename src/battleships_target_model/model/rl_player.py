@@ -155,7 +155,7 @@ class RLPlayer:
             'bombardment': 3
         }
 
-        # Exploration (epsilon-greedy)
+        # Find available positions by shot type
 
         single_coords = np.argwhere(state[1].cpu().numpy() == 1)
         adr_coords = np.argwhere(state[2].cpu().numpy() == 1)
@@ -167,6 +167,9 @@ class RLPlayer:
             'airstrike_up_right': [tuple(coord) for coord in aur_coords],
             'bombardment': [tuple(coord) for coord in bom_coords]
         }
+
+        # Exploration (epsilon-greedy)
+
         if np.random.rand() < self.epsilon:
             valid_types = [t for t, coords in available_coords.items() if len(coords) > 0]
             if not valid_types:
@@ -179,7 +182,7 @@ class RLPlayer:
 
         self.policy.eval()
         with torch.no_grad():
-            input_state = state.unsqueeze(0)  # Add batch dimension
+            input_state = state.unsqueeze(0)
             pos_logits, type_logits = self.policy(input_state)
 
             # Convert to usable numpy arrays
@@ -189,25 +192,20 @@ class RLPlayer:
             best_score = -np.inf
             best_action = None
 
-            # Convert to distributions with masking
-            valid_mask = (state[1] + state[2] + state[3] + state[4]).flatten()  # 1 if any shot type available
-            mask_tensor = torch.tensor(valid_mask, device=self.device)
-            masked_pos_logits = torch.where(mask_tensor > 0, torch.tensor(pos_logits.flatten(), device=self.device), torch.tensor(-1e9, device=self.device))
-            pos_dist = Categorical(logits=masked_pos_logits)
-            type_dist = Categorical(logits=torch.tensor(type_logits, device=self.device))
-
             # Evaluate all valid actions
-            for t, coords in available_coords.items():
+            for shot_type, coords in available_coords.items():
                 if not coords:
                     continue
-                t_idx = shot_type_to_idx[t]
+                t_idx = shot_type_to_idx[shot_type]
                 for (r, c) in coords:
                     score = pos_logits[r, c] + type_logits[t_idx]
                     if score > best_score:
                         best_score = score
                         pos_idx = r * self.grid_size + c
-                        log_prob = pos_dist.log_prob(torch.tensor(pos_idx, device=self.device)) + type_dist.log_prob(torch.tensor(t_idx, device=self.device))
-                        best_action = (r, c, t, log_prob)
+                        pos_logit = torch.tensor(pos_logits[r, c], device=self.device)
+                        type_logit = torch.tensor(type_logits[t_idx], device=self.device)
+                        log_prob = torch.log_softmax(pos_logit.unsqueeze(0), dim=0) + torch.log_softmax(type_logit.unsqueeze(0), dim=0)
+                        best_action = (r, c, shot_type, log_prob)
 
             if best_action is None:
                 shot_type = np.random.choice([t for t, v in available_coords.items() if len(v) > 0])
@@ -285,13 +283,12 @@ class RLPlayer:
             masked_pos_logits = torch.where(mask_tensor > 0, pos_logits.flatten(), torch.tensor(-1e9, device=self.device))
             pos_dist = Categorical(logits=masked_pos_logits)
 
-            # Masking (same as choose_action)
-            shot_type_indices = {"single": 0, "airstrike_up_right": 1, 
-                                    "airstrike_down_right": 2, "bombardment": 3}
-            type_mask = torch.zeros_like(type_logits, dtype=torch.bool)
-            type_mask[shot_type_indices[b["shot_type"]]] = True
-            masked_type_logits = torch.where(type_mask, type_logits, torch.tensor(float('-inf'), device=type_logits.device))
-            type_dist = Categorical(logits=masked_type_logits)
+            # Shot type distribution
+            shot_type_indices = {"single": 0, "airstrike_down_right": 1,
+                     "airstrike_up_right": 2, "bombardment": 3}
+            type_dist = Categorical(logits=type_logits)
+            type_idx = torch.tensor(shot_type_indices[b["shot_type"]], device=self.device)
+            type_log_prob = type_dist.log_prob(type_idx)
             type_idx = torch.tensor(shot_type_indices[b["shot_type"]], device=self.device)
             type_log_prob = type_dist.log_prob(type_idx)
 

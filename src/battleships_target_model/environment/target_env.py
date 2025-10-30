@@ -124,6 +124,10 @@ class BattleshipsEnv:
 
     def process_shot(self, row: int, col: int, shot_type: str) -> int:
         """ Marks the outcome of a shot on the grid and returns the correct reward. """
+        if shot_type in ['airstrike_up_right', 'airstrike_down_right'] and not self.airstrike_available:
+            return self.REWARD_WEIGHTS['invalid']
+        if shot_type == 'bombardment' and not self.bombardment_available:
+            return self.REWARD_WEIGHTS['invalid']
         positions = self.find_all_shot_positions(row, col, shot_type)
         if self.is_out_of_bounds(positions):
             return self.REWARD_WEIGHTS['invalid']
