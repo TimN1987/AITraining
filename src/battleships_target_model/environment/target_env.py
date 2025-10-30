@@ -7,9 +7,9 @@ class BattleshipsEnv:
     def __init__(self, ai_player, airstrike_enabled: bool, bombardment_enabled: bool):
         # Constants
         self.REWARD_WEIGHTS = {
-            'hit_adjacent_shot': 1.0,
-            'hit_inline_shot': 2.0,
-            'untargeted_shot': -5.0,
+            'hit_adjacent_shot': 5.0,
+            'hit_inline_shot': 10.0,
+            'untargeted_shot': -1.0,
             'invalid': -10.0
         }
         self.ADJACENT_DELTAS = [-1, 1]
@@ -92,30 +92,31 @@ class BattleshipsEnv:
         for row, col in sinkings:
             self.grid[row, col] = self.SUNK
 
-    # Run game
+    # Run episode
 
     def run_episode(self):
         """ Runs an episode of targeting a ship. Returns the episode history. """
         episode_history = []
         done = False
-        next_state = self.player.get_state() #update after RLPlayer class created
+        next_state = self.player.get_state(self.grid, self.airstrike_available, self.bombardment_available)
         while not done:
             state = next_state
-            row, col, shot_type = self.player.choose_action() # update after RLPlyaer class created
+            row, col, shot_type, log_probs = self.player.choose_action(state)
             if shot_type == 'airstrike_up_right' or shot_type == 'airstrike_down_right':
                 self.airstrike_available = False
             elif shot_type == 'bombardment':
                 self.bombardment_available = False
             reward = self.process_shot(row, col, shot_type)
             done = len(self.hits) == self.ship_size
-            next_state = self.player.get_state()
+            next_state = self.player.get_state(self.grid, self.airstrike_available, self.bombardment_available)
             episode_history.append({
                 'state': state,
                 'action': (row, col),
                 'shot_type': shot_type,
                 'reward': reward,
                 'next_state': next_state,
-                'done': done
+                'done': done,
+                'log_probs': log_probs
             })
         return episode_history
 
