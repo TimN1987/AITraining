@@ -5,15 +5,13 @@ import torch.optim as optim
 from torch.distributions import Categorical
 import numpy as np
 from pathlib import Path
-from model.replay_buffer import ReplayBuffer
 
 class NeuralNetwork(nn.Module):
     def __init__(self, grid_size=10, num_actions=4):
-        super().__init__()
+        super(NeuralNetwork, self).__init__()
 
-        self.flatten = nn.Flatten()
         self.conv = nn.Sequential(
-            nn.Conv2d(5, 32, kernel_size=3, padding=1),
+            nn.Conv2d(6, 32, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(),
@@ -44,24 +42,25 @@ class NeuralNetwork(nn.Module):
 
 
 class RLPlayer:
-    def __init__(self, grid_size=10, num_actions=4, lr=1e-4, epsilon=0.2, device=None, buffer_capacity=10000, batch_size=64):
+    def __init__(self, grid_size=10, num_actions=4, lr=1e-4, epsilon=0.2, device=None):
         # Constants
         self.EMPTY = 0
-        self.SHIP = 1
         self.MISS = -1
-        self.HIT = 2
-        self.SUNK = 3
+        self.HIT = 1
+        self.SUNK = 2
         self.AIRSTRIKE_UP_RIGHT_DELTAS = [(0, 0), (-1, 1), (-2, 2)]
         self.AIRSTRIKE_DOWN_RIGHT_DELTAS = [(0, 0), (1, 1), (2, 2)]
         self.BOMBARDMENT_DELTAS = [(0, 0), (0, -1), (0, 1), (-1, 0), (1, 0)]
+        self.ADJACENT_DELTAS = [(0, -1), (0, 1), (-1, 0), (1, 0)]
 
         # Game state
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.epsilon = epsilon
+        self.epsilon_min = 0.05
+        self.epsilon_decay = 0.995
         self.grid_size = grid_size
         self.shot_type_dim = num_actions
         self.lr = lr
-        self.batch_size = batch_size
 
         # Initialize the neural network
         self.policy = NeuralNetwork(
@@ -70,22 +69,42 @@ class RLPlayer:
         ).to(self.device)
 
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
-        self.replay_buffer = ReplayBuffer(capacity=buffer_capacity)
 
-    def get_state(self, game_grid, airstrike_available, bombardment_available):
+    def decay_epsilon(self):
+        """ Decays the epsilon rate exponentially. """
+        if self.epsilon > 0:
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
+    def get_state(self, game_grid, hit_adjacent_cells, hit_inline_cells, single_enabled, airstrike_available, bombardment_available):
         """
-        Returns a (5, grid_size, grid_size) tensor representing the visible grid.
+        Returns a (6, grid_size, grid_size) tensor representing the visible grid.
         Channels:
-            [0] hit set to 1.0
-            [1] single available cells set to 1.0
-            [2] airstrike_down_right available cells set to 1.0
-            [3] airstrike_up_right available cells set to 1.0
-            [4] bombardment available cells set to 1.0
+            [0] hit adjacent set to 1.0
+            [1] hit inline set to 1.0
+            [2] single available cells set to 1.0
+            [3] airstrike_down_right available cells set to 1.0
+            [4] airstrike_up_right available cells set to 1.0
+            [5] bombardment available cells set to 1.0
         """
-        # Special shot masks
+        # Mask set up
+        single_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
         airstrike_down_right_mask = np.ones((self.grid_size, self.grid_size), dtype=np.float32) if airstrike_available else np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
         airstrike_up_right_mask = np.ones((self.grid_size, self.grid_size), dtype=np.float32) if airstrike_available else np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
         bombardment_mask = np.ones((self.grid_size, self.grid_size), dtype=np.float32) if bombardment_available else np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
+        hit_adjacent_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
+        hit_inline_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
+
+        # Hit adjacent mask
+        for pos in hit_adjacent_cells:
+            hit_adjacent_mask[pos] = 1.0
+
+        # Hit inline mask
+        for pos in hit_inline_cells:
+            hit_inline_mask[pos] = 1.0
+
+        # Single mask
+        if single_enabled:
+            single_mask[game_grid == self.EMPTY] = 1.0
 
         # Airstrike down right mask
         if airstrike_available:
@@ -135,13 +154,13 @@ class RLPlayer:
                             break
 
         # Set up channels
-        grid = np.zeros((5, self.grid_size, self.grid_size), dtype=np.float32)
-        grid[0][game_grid == self.HIT] = 1.0
-        grid[1][game_grid == self.EMPTY] = 1.0
-        grid[1][game_grid == self.SHIP] = 1.0
-        grid[2] = airstrike_down_right_mask
-        grid[3] = airstrike_up_right_mask
-        grid[4] = bombardment_mask
+        grid = np.zeros((6, self.grid_size, self.grid_size), dtype=np.float32)
+        grid[0] = hit_adjacent_mask
+        grid[1] = hit_inline_mask
+        grid[2] = single_mask
+        grid[3] = airstrike_down_right_mask
+        grid[4] = airstrike_up_right_mask
+        grid[5] = bombardment_mask
 
         return torch.tensor(grid, dtype=torch.float32, device=self.device)
 
@@ -157,10 +176,10 @@ class RLPlayer:
 
         # Find available positions by shot type
 
-        single_coords = np.argwhere(state[1].cpu().numpy() == 1)
-        adr_coords = np.argwhere(state[2].cpu().numpy() == 1)
-        aur_coords = np.argwhere(state[3].cpu().numpy() == 1)
-        bom_coords = np.argwhere(state[4].cpu().numpy() == 1)
+        single_coords = np.argwhere(state[2].cpu().numpy() == 1)
+        adr_coords = np.argwhere(state[3].cpu().numpy() == 1)
+        aur_coords = np.argwhere(state[4].cpu().numpy() == 1)
+        bom_coords = np.argwhere(state[5].cpu().numpy() == 1)
         available_coords = {
             'single': [tuple(coord) for coord in single_coords],
             'airstrike_down_right': [tuple(coord) for coord in adr_coords],
@@ -181,46 +200,59 @@ class RLPlayer:
         # Exploitation
 
         self.policy.eval()
-        with torch.no_grad():
-            input_state = state.unsqueeze(0)
-            pos_logits, type_logits = self.policy(input_state)
+        input_state = state.unsqueeze(0)
+        pos_logits, type_logits = self.policy(input_state)
 
-            # Convert to usable numpy arrays
-            pos_logits = pos_logits.cpu().numpy().reshape(self.grid_size, self.grid_size)
-            type_logits = type_logits.cpu().numpy().flatten()
+        pos_logits_tensor = pos_logits.view(self.grid_size, self.grid_size)
+        type_logits_tensor = type_logits.view(-1)
 
-            best_score = -np.inf
-            best_action = None
+        best_score = -np.inf
+        best_action = None
 
-            # Evaluate all valid actions
-            for shot_type, coords in available_coords.items():
-                if not coords:
-                    continue
-                t_idx = shot_type_to_idx[shot_type]
-                for (r, c) in coords:
-                    score = pos_logits[r, c] + type_logits[t_idx]
-                    if score > best_score:
-                        best_score = score
-                        pos_idx = r * self.grid_size + c
-                        pos_logit = torch.tensor(pos_logits[r, c], device=self.device)
-                        type_logit = torch.tensor(type_logits[t_idx], device=self.device)
-                        log_prob = torch.log_softmax(pos_logit.unsqueeze(0), dim=0) + torch.log_softmax(type_logit.unsqueeze(0), dim=0)
-                        best_action = (r, c, shot_type, log_prob)
+        # Evaluate all valid actions
+        for shot_type, coords in available_coords.items():
+            if not coords:
+                continue
+            t_idx = shot_type_to_idx[shot_type]
+            for (r, c) in coords:
+                score = pos_logits_tensor[r, c] + type_logits_tensor[t_idx]
+                if score > best_score:
+                    best_score = score
+                    pos_idx = r * self.grid_size + c
+                    pos_dist = Categorical(logits=pos_logits_tensor.flatten())
+                    type_dist = Categorical(logits=type_logits_tensor)
+                    pos_idx = r * self.grid_size + c
+                    type_idx = shot_type_to_idx[shot_type]
+                    pos_idx_tensor = torch.tensor(pos_idx, dtype=torch.long, device=self.device)
+                    type_idx_tensor = torch.tensor(type_idx, dtype=torch.long, device=self.device)
 
-            if best_action is None:
-                shot_type = np.random.choice([t for t, v in available_coords.items() if len(v) > 0])
-                row, col = available_coords[shot_type][np.random.randint(len(available_coords[shot_type]))]
-                return (row, col, shot_type, None)
+                    log_prob = pos_dist.log_prob(pos_idx_tensor) + type_dist.log_prob(type_idx_tensor)
+                    best_action = (r, c, shot_type, log_prob)
 
-            return best_action
-        
+        if best_action is None:
+            shot_type = np.random.choice([t for t, v in available_coords.items() if len(v) > 0])
+            row, col = available_coords[shot_type][np.random.randint(len(available_coords[shot_type]))]
+            return (row, col, shot_type, None)
+
+        return best_action     
         
     # Train player
+    def learn_from_episode(self, episode_history, gamme=0.99):
+        """
+            Single-step update: update policy directly from the one-shot reward.
+        """
+        step = episode_history[0]
+        if step["log_probs"] is None:
+            return
 
+        policy_loss = -step["log_probs"] * step["reward"]
+
+        self.optimizer.zero_grad()
+        policy_loss.backward()
+        self.optimizer.step()
+    """
+    For longer term learning...
     def learn_from_episode(self, episode_history, gamma = 0.99):
-        """
-        Updates the policy network based on a full episode.
-        """
         returns = []
         R = 0
         # Compute discounted returns
@@ -228,87 +260,26 @@ class RLPlayer:
             R = step["reward"] + gamma * R
             returns.insert(0, R)
 
-        # Normalize returns (optional but helps training stability)
+        # Normalize returns
         returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
-        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+        baseline = returns.mean()
+        advantage = returns - baseline
+        if advantage.numel() > 1:
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+        else:
+            advantage = advantage - advantage.mean()
 
         policy_loss = []
-        for step, Gt in zip(episode_history, returns):
+        for step, A in zip(episode_history, advantage):
             if step["log_probs"] is not None:
-                policy_loss.append(-step["log_probs"] * Gt)  # Gradient ascent on reward
+                policy_loss.append(-step["log_probs"] * A)
 
         if policy_loss:
             loss = torch.stack(policy_loss).sum()
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-
-    def store_episode(self, episode_history):
-        """Push all transitions from an episode into the replay buffer."""
-        for step in episode_history:
-            transition = {
-                "state": step["state"],
-                "action": step["action"],
-                "shot_type": step["shot_type"],
-                "reward": step["reward"],
-                "log_probs": step.get("log_probs"),
-                "done": step.get("done", False)
-            }
-            self.replay_buffer.push(transition)
-
-    def learn_from_replay(self, gamma = 0.99):
-        """Sample a batch from replay memory and update the policy."""
-        if len(self.replay_buffer) < self.batch_size:
-            return  # not enough data yet
-
-        batch = self.replay_buffer.sample(self.batch_size)
-
-        # Prepare tensors
-        states = torch.tensor(np.array([b["state"] for b in batch]), dtype=torch.float32, device=self.device)
-        rewards = torch.tensor([b["reward"] for b in batch], dtype=torch.float32, device=self.device)
-
-        # Compute discounted returns (simple version for single-step)
-        returns = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
-
-        # Recompute log_probs
-        log_probs_list = []
-        for b in batch:
-            pos_logits, type_logits = self.policy(torch.tensor(b["state"], dtype=torch.float32, device=self.device).unsqueeze(0))
-            pos_logits = pos_logits.squeeze(0)
-            type_logits = type_logits.squeeze(0)
-
-            # Mask invalid positions before creating distributions
-            valid_mask = (b["state"][1] + b["state"][2] + b["state"][3] + b["state"][4]).flatten()
-            mask_tensor = torch.tensor(valid_mask, device=self.device)
-            masked_pos_logits = torch.where(mask_tensor > 0, pos_logits.flatten(), torch.tensor(-1e9, device=self.device))
-            pos_dist = Categorical(logits=masked_pos_logits)
-
-            # Shot type distribution
-            shot_type_indices = {"single": 0, "airstrike_down_right": 1,
-                     "airstrike_up_right": 2, "bombardment": 3}
-            type_dist = Categorical(logits=type_logits)
-            type_idx = torch.tensor(shot_type_indices[b["shot_type"]], device=self.device)
-            type_log_prob = type_dist.log_prob(type_idx)
-            type_idx = torch.tensor(shot_type_indices[b["shot_type"]], device=self.device)
-            type_log_prob = type_dist.log_prob(type_idx)
-
-            # Position
-            pos_idx = b["action"][0] * self.grid_size + b["action"][1]
-            valid_positions = torch.arange(self.grid_size**2, device=self.device)
-            pos_mask = torch.zeros_like(pos_logits, dtype=torch.bool)
-            pos_mask[pos_idx] = True
-            masked_pos_logits = torch.where(pos_mask, pos_logits, torch.tensor(float('-inf'), device=pos_logits.device))
-            pos_dist = Categorical(logits=masked_pos_logits)
-            pos_log_prob = pos_dist.log_prob(torch.tensor(pos_idx, device=self.device))
-
-            log_probs_list.append(pos_log_prob + type_log_prob)
-
-        log_probs = torch.stack(log_probs_list)
-        loss = -(log_probs * returns).sum()
-
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+    """
     
     # Saving and loading
 
