@@ -72,9 +72,9 @@ class PolygonDataset:
                 elif shape == "diamond":
                     draw.polygon([(x, y - s), (x - s, y), (x, y + s), (x + s, y)], fill=255)
                 elif shape == "star":
-                    num_points = random.randint(5, 12)  # number of spikes
+                    num_points = random.randint(5, 12)
                     outer_radius = s
-                    inner_radius = s / 2  # controls "depth" of spikes
+                    inner_radius = s / 2
                     points = []
                     angle_step = 360 / (num_points * 2)
                     for i in range(num_points * 2):

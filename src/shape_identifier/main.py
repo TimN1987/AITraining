@@ -19,6 +19,7 @@ def load_and_preprocess_image(image_path, image_size=28):
 def ask_shape_types():
     """Prompt user for shape types."""
     default_shapes = ["circle", "square", "triangle"]
+    print("Available shapes: circle, triangle, square, rectangle, pentagon, hexagon, diamond, star.")
     user_input = input(f"Enter shape types separated by commas (default {default_shapes}): ").strip()
     if not user_input:
         return default_shapes
