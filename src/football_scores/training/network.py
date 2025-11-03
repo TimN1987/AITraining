@@ -27,7 +27,9 @@ class NeuralNetwork(nn.Module):
     
 class FootballPredictor:
     def __init__(self, num_teams, lr=0.001):
-        self.model = NeuralNetwork(num_teams)
+        self.num_teams = num_teams
+        self.lr = lr
+        self.model = NeuralNetwork(self.num_teams)
         self.loss = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
@@ -54,7 +56,7 @@ class FootballPredictor:
     def _model_path(self):
         """Helper to build the model save path."""
         Path("models").mkdir(parents=True, exist_ok=True)
-        filename = f"football_predictor_{self.num_teams}_teams.pth"
+        filename = f"football_predictor.pth"
         return Path("models") / filename
 
     def save(self):
