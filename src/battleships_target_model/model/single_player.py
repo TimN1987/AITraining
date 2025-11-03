@@ -9,48 +9,43 @@ from pathlib import Path
 class NeuralNetwork(nn.Module):
     def __init__(self, grid_size=10, num_actions=4):
         super(NeuralNetwork, self).__init__()
-
+        self.grid_size = grid_size
         self.conv = nn.Sequential(
-            nn.Conv2d(6, 32, kernel_size=3, padding=1),
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.ReLU()
         )
-
-        conv_output_size = 64 * grid_size * grid_size
-
+        conv_output_size = 128 * grid_size * grid_size
         self.network = nn.Sequential(
-            nn.Linear(conv_output_size, 512),
+            nn.Linear(conv_output_size, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
             nn.ReLU(),
             nn.Linear(512, 256),
             nn.ReLU()
         )
-
-        self.pos_head = nn.Linear(256, grid_size * grid_size)
-        self.type_head = nn.Linear(256, num_actions)
+        self.pos_head = nn.Sequential(
+            nn.Linear(256, grid_size * grid_size),
+            nn.Sigmoid()
+        )
 
     def forward(self, x: torch.Tensor):
         x = self.conv(x)
         x = x.view(x.size(0), -1)
         x = self.network(x)
-
         pos_logits = self.pos_head(x)
-        type_logits = self.type_head(x)
-        return pos_logits, type_logits
-
+        return pos_logits.view(-1, self.grid_size, self.grid_size)
 
 class RLPlayer:
-    def __init__(self, grid_size=10, num_actions=4, lr=1e-4, epsilon=0.2, device=None):
+    def __init__(self, grid_size=10, lr=1e-4, epsilon=0.2, device=None):
         # Constants
         self.EMPTY = 0
         self.MISS = -1
         self.HIT = 1
         self.SUNK = 2
-        self.AIRSTRIKE_UP_RIGHT_DELTAS = [(0, 0), (-1, 1), (-2, 2)]
-        self.AIRSTRIKE_DOWN_RIGHT_DELTAS = [(0, 0), (1, 1), (2, 2)]
-        self.BOMBARDMENT_DELTAS = [(0, 0), (0, -1), (0, 1), (-1, 0), (1, 0)]
         self.ADJACENT_DELTAS = [(0, -1), (0, 1), (-1, 0), (1, 0)]
 
         # Game state
@@ -59,13 +54,11 @@ class RLPlayer:
         self.epsilon_min = 0.05
         self.epsilon_decay = 0.995
         self.grid_size = grid_size
-        self.shot_type_dim = num_actions
         self.lr = lr
 
         # Initialize the neural network
         self.policy = NeuralNetwork(
-            grid_size=grid_size,
-            num_actions=num_actions
+            grid_size=grid_size
         ).to(self.device)
 
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
@@ -92,75 +85,42 @@ class RLPlayer:
 
     def choose_action(self, state):
         """ Selects an action based on the stated. """
-
-        shot_type_to_idx = {
-            'single': 0,
-            'airstrike_down_right': 1,
-            'airstrike_up_right': 2,
-            'bombardment': 3
-        }
-
-        # Find available positions by shot type
-
-        single_coords = np.argwhere(state[2].cpu().numpy() == 1)
-        adr_coords = np.argwhere(state[3].cpu().numpy() == 1)
-        aur_coords = np.argwhere(state[4].cpu().numpy() == 1)
-        bom_coords = np.argwhere(state[5].cpu().numpy() == 1)
-        available_coords = {
-            'single': [tuple(coord) for coord in single_coords],
-            'airstrike_down_right': [tuple(coord) for coord in adr_coords],
-            'airstrike_up_right': [tuple(coord) for coord in aur_coords],
-            'bombardment': [tuple(coord) for coord in bom_coords]
-        }
+        available_coords = np.argwhere(state[2].cpu().numpy() == 1)
 
         # Exploration (epsilon-greedy)
 
         if np.random.rand() < self.epsilon:
-            valid_types = [t for t, coords in available_coords.items() if len(coords) > 0]
-            if not valid_types:
-                return (0, 0, 'single', torch.tensor(0.0, device=self.device))
-            shot_type = np.random.choice(valid_types)
-            row, col = available_coords[shot_type][np.random.randint(len(available_coords[shot_type]))]
-            return (row, col, shot_type, None)
+            row, col = available_coords[np.random.randint(len(available_coords))]
+            return (row, col, None)
         
         # Exploitation
 
         self.policy.eval()
         input_state = state.unsqueeze(0)
-        pos_logits, type_logits = self.policy(input_state)
-
+        pos_logits = self.policy(input_state)
         pos_logits_tensor = pos_logits.view(self.grid_size, self.grid_size)
-        type_logits_tensor = type_logits.view(-1)
-
         best_score = -np.inf
-        best_action = None
 
         # Evaluate all valid actions
-        for shot_type, coords in available_coords.items():
+        for coords in available_coords:
             if not coords:
                 continue
-            t_idx = shot_type_to_idx[shot_type]
             for (r, c) in coords:
-                score = pos_logits_tensor[r, c] + type_logits_tensor[t_idx]
+                score = pos_logits_tensor[r, c]
                 if score > best_score:
                     best_score = score
                     pos_idx = r * self.grid_size + c
                     pos_dist = Categorical(logits=pos_logits_tensor.flatten())
-                    type_dist = Categorical(logits=type_logits_tensor)
                     pos_idx = r * self.grid_size + c
-                    type_idx = shot_type_to_idx[shot_type]
                     pos_idx_tensor = torch.tensor(pos_idx, dtype=torch.long, device=self.device)
-                    type_idx_tensor = torch.tensor(type_idx, dtype=torch.long, device=self.device)
-
-                    log_prob = pos_dist.log_prob(pos_idx_tensor) + type_dist.log_prob(type_idx_tensor)
-                    best_action = (r, c, shot_type, log_prob)
+                    log_prob = pos_dist.log_prob(pos_idx_tensor)
+                    best_action = (r, c, log_prob)
 
         if best_action is None:
-            shot_type = np.random.choice([t for t, v in available_coords.items() if len(v) > 0])
-            row, col = available_coords[shot_type][np.random.randint(len(available_coords[shot_type]))]
-            return (row, col, shot_type, None)
+            row, col = available_coords[np.random.randint(len(available_coords))]
+            return (row, col, None)
 
-        return best_action     
+        return best_action
         
     # Train player
     def learn_from_episode(self, episode_history, gamme=0.99):
@@ -176,43 +136,13 @@ class RLPlayer:
         self.optimizer.zero_grad()
         policy_loss.backward()
         self.optimizer.step()
-    """
-    For longer term learning...
-    def learn_from_episode(self, episode_history, gamma = 0.99):
-        returns = []
-        R = 0
-        # Compute discounted returns
-        for step in reversed(episode_history):
-            R = step["reward"] + gamma * R
-            returns.insert(0, R)
-
-        # Normalize returns
-        returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
-        baseline = returns.mean()
-        advantage = returns - baseline
-        if advantage.numel() > 1:
-            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-        else:
-            advantage = advantage - advantage.mean()
-
-        policy_loss = []
-        for step, A in zip(episode_history, advantage):
-            if step["log_probs"] is not None:
-                policy_loss.append(-step["log_probs"] * A)
-
-        if policy_loss:
-            loss = torch.stack(policy_loss).sum()
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-    """
     
     # Saving and loading
 
     def _model_path(self):
         """Helper to build a model path."""
         Path("models").mkdir(parents=True, exist_ok=True)
-        filename = f"battleships_target_model.pth"
+        filename = f"battleships_single_target_model.pth"
         return Path("models") / filename
 
     def save(self):
@@ -222,16 +152,15 @@ class RLPlayer:
             'policy_state_dict': self.policy.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'epsilon': self.epsilon,
-            'grid_size': self.grid_size,
-            'shot_type_dim': self.shot_type_dim
+            'grid_size': self.grid_size
         }, save_path)
-        print(f"Saved model for grid {self.grid_size}x{self.grid_size} to {save_path}")
+        print(f"Saved model for single shot to {save_path}")
 
     def load(self):
         """Load the model checkpoint for the current grid size if available."""
         load_path = self._model_path()
         if not load_path.exists():
-            print(f"No saved model found for grid {self.grid_size}x{self.grid_size}. Starting fresh.")
+            print(f"No saved model found for single shot. Starting fresh.")
             return
 
         checkpoint = torch.load(load_path, map_location=self.device)
@@ -239,6 +168,5 @@ class RLPlayer:
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.epsilon = checkpoint.get('epsilon', self.epsilon)
         self.grid_size = checkpoint.get('grid_size', self.grid_size)
-        self.shot_type_dim = checkpoint.get('shot_type_dim', self.shot_type_dim)
 
-        print(f"Loaded model for grid {self.grid_size}x{self.grid_size} from {load_path}")
+        print(f"Loaded model for single shot from {load_path}")
