@@ -5,6 +5,7 @@ import torch.optim as optim
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
+from pathlib import Path
 from training.data_creator import PolygonDataset
 
 class NeuralNetwork(nn.Module):
@@ -95,3 +96,39 @@ class ShapeIdentifier:
             output = self.model(img)
             class_idx = torch.argmax(output, dim=1).item()
         return self.shape_types[class_idx]
+    
+    # Saving and loading models
+
+    def _model_path(self):
+        """Helper to build the model save path."""
+        Path("models").mkdir(parents=True, exist_ok=True)
+        filename = f"shape_identifier_{'_'.join(self.shape_types)}.pth"
+        return Path("models") / filename
+
+    def save(self):
+        """Save model state, optimizer, and shape info."""
+        save_path = self._model_path()
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'shape_types': self.shape_types
+        }, save_path)
+        print(f"Model saved to {save_path.resolve()}")
+
+    def load(self):
+        """Load model and optimizer state if file exists."""
+        load_path = self._model_path()
+        if not load_path.exists():
+            print(f"No saved model found at {load_path}. Starting fresh.")
+            return False
+
+        data = torch.load(load_path, map_location=self.device)
+
+        # Load model weights and shape info
+        self.model.load_state_dict(data['model_state_dict'])
+        self.optimizer.load_state_dict(data['optimizer_state_dict'])
+        self.shape_types = data['shape_types']
+        self.model.eval()
+
+        print(f"Model loaded from {load_path.resolve()} (shapes: {self.shape_types})")
+        return True

@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 from training.network import ShapeIdentifier
 
+
 def load_and_preprocess_image(image_path, image_size=28):
     """Loads an image, converts to grayscale, resizes, and normalizes."""
     try:
@@ -14,6 +15,7 @@ def load_and_preprocess_image(image_path, image_size=28):
         print(f"Error loading image: {e}")
         return None
 
+
 def ask_shape_types():
     """Prompt user for shape types."""
     default_shapes = ["circle", "square", "triangle"]
@@ -22,37 +24,43 @@ def ask_shape_types():
         return default_shapes
     return [s.strip().lower() for s in user_input.split(",") if s.strip()]
 
+
 def main():
     print("==============================================")
     print("         POLYGON SHAPE IDENTIFIER")
     print("==============================================\n")
 
-    # Ask user for shape types
     shapes = ask_shape_types()
-    print(f"Using shapes: {shapes}")
+    print(f"Using shapes: {shapes}\n")
 
-    # Create identifier
     identifier = ShapeIdentifier(shapes, device="cpu")
 
-    # Ask for training settings
-    try:
-        epochs = int(input("Enter number of training epochs (default 5): ") or 5)
-        batch_size = int(input("Enter batch size (default 32): ") or 32)
-    except ValueError:
-        epochs, batch_size = 5, 32
+    if identifier.load():
+        print("Model loaded successfully.\n")
+    else:
+        print("No saved model found. You may need to train one.\n")
 
-    print("\nTraining started...")
-    identifier.train(epochs=epochs, batch_size=batch_size)
-    print("\nTraining complete!\n")
-
-    # Prediction loop
     while True:
         print("Options:")
-        print("1. Identify a shape from an image file")
-        print("2. Quit")
-        choice = input("Select an option (1-2): ").strip()
+        print("1. Train / Retrain the model")
+        print("2. Identify a shape from an image")
+        print("3. Quit")
+        choice = input("Select an option (1-3): ").strip()
 
         if choice == "1":
+            try:
+                epochs = int(input("Enter number of training epochs (default 5): ") or 5)
+                batch_size = int(input("Enter batch size (default 32): ") or 32)
+            except ValueError:
+                epochs, batch_size = 5, 32
+
+            print("\nTraining started...")
+            identifier.train(epochs=epochs, batch_size=batch_size)
+            print("\nTraining complete!")
+            identifier.save()
+            print("Model saved.\n")
+
+        elif choice == "2":
             image_path = input("Enter the path to the image file: ").strip()
             if not os.path.exists(image_path):
                 print("File not found. Try again.\n")
@@ -63,13 +71,15 @@ def main():
                 continue
 
             prediction = identifier.predict(img)
-            print(f"Predicted shape: {prediction}\n")
+            print(f"\nPredicted shape: {prediction}\n")
 
-        elif choice == "2":
+        elif choice == "3":
             print("Exiting...")
             break
+
         else:
-            print("Invalid option. Please select 1 or 2.\n")
+            print("Invalid option. Please select 1, 2, or 3.\n")
+
 
 if __name__ == "__main__":
     main()
