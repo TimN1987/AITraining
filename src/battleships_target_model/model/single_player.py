@@ -75,22 +75,16 @@ class RLPlayer:
         if self.epsilon > 0:
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-    def get_state(self, game_grid, hit_adjacent_cells, hit_inline_cells, single_enabled, airstrike_available, bombardment_available):
+    def get_state(self, game_grid, hit_adjacent_cells, hit_inline_cells):
         """
-        Returns a (6, grid_size, grid_size) tensor representing the visible grid.
+        Returns a (3, grid_size, grid_size) tensor representing the visible grid.
         Channels:
             [0] hit adjacent set to 1.0
             [1] hit inline set to 1.0
-            [2] single available cells set to 1.0
-            [3] airstrike_down_right available cells set to 1.0
-            [4] airstrike_up_right available cells set to 1.0
-            [5] bombardment available cells set to 1.0
+            [2] available cells set to 1.0
         """
         # Mask set up
-        single_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-        airstrike_down_right_mask = np.ones((self.grid_size, self.grid_size), dtype=np.float32) if airstrike_available else np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-        airstrike_up_right_mask = np.ones((self.grid_size, self.grid_size), dtype=np.float32) if airstrike_available else np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-        bombardment_mask = np.ones((self.grid_size, self.grid_size), dtype=np.float32) if bombardment_available else np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
+        available_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
         hit_adjacent_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
         hit_inline_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
 
@@ -102,65 +96,14 @@ class RLPlayer:
         for pos in hit_inline_cells:
             hit_inline_mask[pos] = 1.0
 
-        # Single mask
-        if single_enabled:
-            single_mask[game_grid == self.EMPTY] = 1.0
-
-        # Airstrike down right mask
-        if airstrike_available:
-            max_rd = max(delta[0] for delta in self.AIRSTRIKE_DOWN_RIGHT_DELTAS)
-            max_cd = max(delta[1] for delta in self.AIRSTRIKE_DOWN_RIGHT_DELTAS)
-            for r in range(self.grid_size):
-                if r + max_rd >= self.grid_size:
-                    continue
-                for c in range(self.grid_size):
-                    if c + max_cd >= self.grid_size:
-                        continue
-                    for rd, cd in self.AIRSTRIKE_DOWN_RIGHT_DELTAS:
-                        if game_grid[r + rd, c + cd] in [self.MISS, self.HIT, self.SUNK]:
-                            airstrike_down_right_mask[r, c] = 0
-                            break
-
-        # Airstrike up right mask
-        if airstrike_available:
-            min_rd = min(delta[0] for delta in self.AIRSTRIKE_UP_RIGHT_DELTAS)
-            max_cd = max(delta[1] for delta in self.AIRSTRIKE_UP_RIGHT_DELTAS)
-            for r in range(self.grid_size):
-                if r + min_rd < 0:
-                    continue
-                for c in range(self.grid_size):
-                    if c + max_cd >= self.grid_size:
-                        continue
-                    for rd, cd in self.AIRSTRIKE_UP_RIGHT_DELTAS:
-                        if game_grid[r + rd, c + cd] in [self.MISS, self.HIT, self.SUNK]:
-                            airstrike_up_right_mask[r, c] = 0
-                            break
-
-        # Bombardment mask
-        if bombardment_available:
-            max_rd = max(delta[0] for delta in self.BOMBARDMENT_DELTAS)
-            min_rd = min(delta[0] for delta in self.BOMBARDMENT_DELTAS)
-            max_cd = max(delta[1] for delta in self.BOMBARDMENT_DELTAS)
-            min_cd = min(delta[1] for delta in self.BOMBARDMENT_DELTAS)
-            for r in range(self.grid_size):
-                if r + max_rd >= self.grid_size or r + min_rd < 0:
-                    continue
-                for c in range(self.grid_size):
-                    if c + max_cd >= self.grid_size or c + min_cd < 0:
-                        continue
-                    for rd, cd in self.BOMBARDMENT_DELTAS:
-                        if game_grid[r + rd, c + cd] in [self.MISS, self.HIT, self.SUNK]:
-                            bombardment_mask[r, c] = 0
-                            break
+        # Available mask
+        available_mask[game_grid == self.EMPTY] = 1.0
 
         # Set up channels
-        grid = np.zeros((6, self.grid_size, self.grid_size), dtype=np.float32)
+        grid = np.zeros((2, self.grid_size, self.grid_size), dtype=np.float32)
         grid[0] = hit_adjacent_mask
         grid[1] = hit_inline_mask
-        grid[2] = single_mask
-        grid[3] = airstrike_down_right_mask
-        grid[4] = airstrike_up_right_mask
-        grid[5] = bombardment_mask
+        grid[2] = available_mask
 
         return torch.tensor(grid, dtype=torch.float32, device=self.device)
 

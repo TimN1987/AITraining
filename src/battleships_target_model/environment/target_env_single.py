@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from typing import List, Tuple, Set
+from typing import Tuple, Set
 
 class BattleshipsEnv:
 
