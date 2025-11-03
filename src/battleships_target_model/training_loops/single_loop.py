@@ -20,8 +20,7 @@ def train_single_shot(player: RLPlayer, total_games: int = 5000, num_targets: in
     Returns:
         The trained RLPlayer.
     """
-    env = BattleshipsEnv(player, num_targets, single_enabled=True,
-                         airstrike_enabled=False, bombardment_enabled=False, print_stats=False)
+    env = BattleshipsEnv(player, num_targets, print_stats=False)
 
     all_rewards = []
     all_accuracies = []

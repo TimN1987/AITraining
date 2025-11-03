@@ -1,7 +1,7 @@
 import os
 import sys
+from model.single_player import RLPlayer
 from training_loops.single_loop import train_single_shot
-from model.rl_player import RLPlayer
 
 
 # -------------------------------
@@ -89,7 +89,6 @@ def main():
 
     # Start training
     if training_type == "single":
-        from single_loop import train_single_shot
         player = train_single_shot(player, total_games=total_games, num_targets=num_targets)
 
     print("\nTraining complete. Model saved.")

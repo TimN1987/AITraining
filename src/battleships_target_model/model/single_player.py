@@ -1,4 +1,3 @@
-import os
 import torch
 from torch import nn
 import torch.optim as optim
@@ -75,8 +74,10 @@ class RLPlayer:
         """
         # Set up channels
         grid = torch.zeros((3, self.grid_size, self.grid_size), dtype=torch.float32, device=self.device)
-        grid[0][hit_adjacent_cells] = 1.0
-        grid[1][hit_inline_cells] = 1.0
+        for r, c in hit_adjacent_cells:
+            grid[0, r, c] = 1.0
+        for r, c in hit_inline_cells:
+            grid[1, r, c] = 1.0
         grid[2][game_grid == self.EMPTY] = 1.0
         return grid
 
@@ -93,9 +94,8 @@ class RLPlayer:
         
         # Exploitation
 
-        self.policy.eval()
-        with torch.no_grad():
-            pos_logits = self.policy(state.unsqueeze(0)).squeeze(0)
+        self.policy.train()
+        pos_logits = self.policy(state.unsqueeze(0)).squeeze(0)
 
         # Mask out invalid (already fired) cells
         masked_logits = pos_logits.clone()

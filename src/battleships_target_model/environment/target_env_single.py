@@ -4,7 +4,7 @@ from typing import Tuple, Set
 
 class BattleshipsEnv:
 
-    def __init__(self, ai_player, num_targets: int = 1, single_enabled: bool = True, airstrike_enabled: bool = False, bombardment_enabled: bool = False, print_stats: bool = False):
+    def __init__(self, ai_player, num_targets: int = 1, print_stats: bool = False):
         # Constants
         self.REWARD_WEIGHTS = {
             'hit_adjacent_shot': 2.0,
@@ -105,8 +105,8 @@ class BattleshipsEnv:
         reward = self.calculate_reward(row, col)
         self.grid[row, col] = self.MISS
         # Update game information
-        self.hit_adjacent_cells.difference_update(row, col)
-        self.hit_inline_cells.difference_update(row, col)
+        self.hit_adjacent_cells.discard((row, col))
+        self.hit_inline_cells.discard((row, col))
         return reward
     
     def is_out_of_bounds(self, row: int, col: int) -> bool:
