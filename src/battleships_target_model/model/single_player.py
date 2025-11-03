@@ -83,28 +83,11 @@ class RLPlayer:
             [1] hit inline set to 1.0
             [2] available cells set to 1.0
         """
-        # Mask set up
-        available_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-        hit_adjacent_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-        hit_inline_mask = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-
-        # Hit adjacent mask
-        for pos in hit_adjacent_cells:
-            hit_adjacent_mask[pos] = 1.0
-
-        # Hit inline mask
-        for pos in hit_inline_cells:
-            hit_inline_mask[pos] = 1.0
-
-        # Available mask
-        available_mask[game_grid == self.EMPTY] = 1.0
-
         # Set up channels
-        grid = np.zeros((2, self.grid_size, self.grid_size), dtype=np.float32)
-        grid[0] = hit_adjacent_mask
-        grid[1] = hit_inline_mask
-        grid[2] = available_mask
-
+        grid = torch.zeros((3, self.grid_size, self.grid_size), dtype=torch.float32, device=self.device)
+        grid[0][hit_adjacent_cells] = 1.0
+        grid[1][hit_inline_cells] = 1.0
+        grid[2][game_grid == self.EMPTY] = 1.0
         return torch.tensor(grid, dtype=torch.float32, device=self.device)
 
     def choose_action(self, state):
