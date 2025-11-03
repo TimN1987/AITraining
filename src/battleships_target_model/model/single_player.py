@@ -27,10 +27,7 @@ class NeuralNetwork(nn.Module):
             nn.Linear(512, 256),
             nn.ReLU()
         )
-        self.pos_head = nn.Sequential(
-            nn.Linear(256, grid_size * grid_size),
-            nn.Sigmoid()
-        )
+        self.pos_head = nn.Linear(256, grid_size * grid_size)
 
     def forward(self, x: torch.Tensor):
         x = self.conv(x)
@@ -81,53 +78,48 @@ class RLPlayer:
         grid[0][hit_adjacent_cells] = 1.0
         grid[1][hit_inline_cells] = 1.0
         grid[2][game_grid == self.EMPTY] = 1.0
-        return torch.tensor(grid, dtype=torch.float32, device=self.device)
+        return grid
 
     def choose_action(self, state):
-        """ Selects an action based on the stated. """
-        available_coords = np.argwhere(state[2].cpu().numpy() == 1)
+        """ Selects an action based on the state. """
+        available_mask = state[2] == 1
+        available_coords = torch.nonzero(available_mask, as_tuple=False)
 
         # Exploration (epsilon-greedy)
 
         if np.random.rand() < self.epsilon:
-            row, col = available_coords[np.random.randint(len(available_coords))]
+            row, col = available_coords[np.random.randint(len(available_coords))].tolist()
             return (row, col, None)
         
         # Exploitation
 
         self.policy.eval()
-        input_state = state.unsqueeze(0)
-        pos_logits = self.policy(input_state)
-        pos_logits_tensor = pos_logits.view(self.grid_size, self.grid_size)
-        best_score = -np.inf
+        with torch.no_grad():
+            pos_logits = self.policy(state.unsqueeze(0)).squeeze(0)
 
-        # Evaluate all valid actions
-        for coords in available_coords:
-            if not coords:
-                continue
-            for (r, c) in coords:
-                score = pos_logits_tensor[r, c]
-                if score > best_score:
-                    best_score = score
-                    pos_idx = r * self.grid_size + c
-                    pos_dist = Categorical(logits=pos_logits_tensor.flatten())
-                    pos_idx = r * self.grid_size + c
-                    pos_idx_tensor = torch.tensor(pos_idx, dtype=torch.long, device=self.device)
-                    log_prob = pos_dist.log_prob(pos_idx_tensor)
-                    best_action = (r, c, log_prob)
+        # Mask out invalid (already fired) cells
+        masked_logits = pos_logits.clone()
+        masked_logits[~available_mask] = -float('inf')
 
-        if best_action is None:
-            row, col = available_coords[np.random.randint(len(available_coords))]
-            return (row, col, None)
+        # Convert to probability distribution
+        pos_dist = Categorical(logits=masked_logits.flatten())
 
-        return best_action
+        # Sample action according to predicted probabilities
+        pos_idx = pos_dist.sample()
+        r, c = divmod(pos_idx.item(), self.grid_size)
+
+        # Log prob for policy gradient
+        log_prob = pos_dist.log_prob(pos_idx)
+
+        return (r, c, log_prob)
         
     # Train player
-    def learn_from_episode(self, episode_history, gamme=0.99):
+    def learn_from_episode(self, episode_history, gamma=0.99):
         """
             Single-step update: update policy directly from the one-shot reward.
         """
         step = episode_history[0]
+
         if step["log_probs"] is None:
             return
 
@@ -136,6 +128,7 @@ class RLPlayer:
         self.optimizer.zero_grad()
         policy_loss.backward()
         self.optimizer.step()
+        self.decay_epsilon()
     
     # Saving and loading
 
