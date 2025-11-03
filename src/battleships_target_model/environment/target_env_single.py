@@ -77,94 +77,56 @@ class BattleshipsEnv:
         """ Runs an episode of targeting a ship. Returns the episode history. """
         episode_history = []
         done = False
-        next_state = self.player.get_state(self.grid, self.hit_adjacent_cells, self.hit_inline_cells, self.single_enabled, self.airstrike_available, self.bombardment_available)
+        next_state = self.player.get_state(self.grid, self.hit_adjacent_cells, self.hit_inline_cells)
         while not done:
             state = next_state
-            row, col, shot_type, log_probs = self.player.choose_action(state)
-            reward = self.process_shot(row, col, shot_type)
+            row, col, log_probs = self.player.choose_action(state)
+            reward = self.process_shot(row, col)
             done = len(episode_history) == 0
-            next_state = self.player.get_state(self.grid, self.hit_adjacent_cells, self.hit_inline_cells, self.single_enabled, self.airstrike_available, self.bombardment_available)
+            next_state = self.player.get_state(self.grid, self.hit_adjacent_cells, self.hit_inline_cells)
             episode_history.append({
                 'state': state,
                 'action': (row, col),
-                'shot_type': shot_type,
                 'reward': reward,
                 'next_state': next_state,
                 'done': done,
                 'log_probs': log_probs
             })
             if self.print_stats:
-                print(f"Shot {len(episode_history):02d}: {shot_type} at ({row},{col}) -> reward {reward:+.2f}")
+                print(f"Shot {len(episode_history):02d}: single at ({row},{col}) -> reward {reward:+.2f}")
         return episode_history
 
     # Process shot
 
-    def process_shot(self, row: int, col: int, shot_type: str) -> int:
+    def process_shot(self, row: int, col: int) -> int:
         """ Marks the outcome of a shot on the grid and returns the correct reward. """
-        if shot_type == 'single' and not self.single_enabled:
+        if self.is_out_of_bounds(row, col):
             return self.REWARD_WEIGHTS['invalid']
-        if shot_type in ['airstrike_up_right', 'airstrike_down_right'] and not self.airstrike_available:
-            return self.REWARD_WEIGHTS['invalid']
-        if shot_type == 'bombardment' and not self.bombardment_available:
-            return self.REWARD_WEIGHTS['invalid']
-        positions = self.find_all_shot_positions(row, col, shot_type)
-        if self.is_out_of_bounds(positions):
-            return self.REWARD_WEIGHTS['invalid']
-        reward = self.calculate_reward(positions)
-        for row, col in positions:
-            self.grid[row, col] = self.MISS
+        reward = self.calculate_reward(row, col)
+        self.grid[row, col] = self.MISS
         # Update game information
-        self.hit_adjacent_cells.difference_update(positions)
-        self.hit_inline_cells.difference_update(positions)
-        if shot_type == 'airstrike_up_right' or shot_type == 'airstrike_down_right':
-            self.airstrike_available = False
-        elif shot_type == 'bombardment':
-            self.bombardment_available = False
+        self.hit_adjacent_cells.difference_update(row, col)
+        self.hit_inline_cells.difference_update(row, col)
         return reward
-
-    def find_all_shot_positions(self, row: int, col: int, shot_type: str) -> List[Tuple[int, int]]:
-        """ Returns a list of all positions hit by the given shot position and type. """
-        positions = [(row, col)]
-        if shot_type == 'single':
-            return positions
-        if shot_type == 'airstrike_up_right':
-            deltas = self.AIRSTRIKE_UP_RIGHT_DELTAS
-        elif shot_type == 'airstrike_down_right':
-            deltas = self.AIRSTRIKE_DOWN_RIGHT_DELTAS
-        elif shot_type == 'bombardment':
-            deltas = self.BOMBARDMENT_DELTAS
-        for row_delta, col_delta in deltas:
-            positions.append((row + row_delta, col + col_delta))
-        return positions
     
-    def is_out_of_bounds(self, positions: List[Tuple[int, int]]) -> bool:
+    def is_out_of_bounds(self, row: int, col: int) -> bool:
         """ Checks if any from a list of shot positions is outside the grid. """
-        for row, col in positions:
-            if not (row in range(self.GRID_SIZE) and col in range(self.GRID_SIZE)):
-                return True
+        if not (row in range(self.GRID_SIZE) and col in range(self.GRID_SIZE)):
+            return True
         return False
 
     # Reward calculation
 
-    def calculate_reward(self, positions: List[Tuple[int, int]]) -> int:
+    def calculate_reward(self, row: int, col: int) -> int:
         """ Calculates the total reward for a turn based on the shot selection relative to known hits. """
-        hit_inline_count = 0
-        hit_adjacent_count = 0
-        untargeted_count = 0
-        for row, col in positions:
-            if self.grid[row, col] != self.EMPTY:
-                return self.REWARD_WEIGHTS['invalid']
-            if (row, col) in self.hit_inline_cells:
-                hit_inline_count += 1
-            elif (row, col) in self.hit_adjacent_cells:
-                hit_adjacent_count += 1
-            else:
-                untargeted_count += 1
-        if hit_inline_count > 0:
-            return self.REWARD_WEIGHTS['hit_inline_shot'] * hit_inline_count
-        if hit_adjacent_count > 0:
-            return self.REWARD_WEIGHTS['hit_adjacent_shot'] * hit_adjacent_count
-        return self.REWARD_WEIGHTS['untargeted_shot'] * untargeted_count
+        if self.grid[row, col] != self.EMPTY:
+            return self.REWARD_WEIGHTS['invalid']
+        if (row, col) in self.hit_inline_cells:
+            return self.REWARD_WEIGHTS['hit_inline_shot']
+        elif (row, col) in self.hit_adjacent_cells:
+            return self.REWARD_WEIGHTS['hit_adjacent_shot']
+        else:
+            return self.REWARD_WEIGHTS['untargeted_shot']
 
     def find_hit_adjacent_positions(self) -> Set[Tuple[int, int]]:
         """ Returns a set of positions adjacent to a hit for reward calculation and state set-up. """
