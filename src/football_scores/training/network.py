@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from pathlib import Path
 
 class NeuralNetwork(nn.Module):
     def __init__(self, num_teams):
@@ -35,7 +36,7 @@ class FootballPredictor:
             self.model.train()
             self.optimizer.zero_grad()
             scores_pred = self.model(X)
-            loss = self.loss_fn(scores_pred, y)
+            loss = self.loss(scores_pred, y)
             loss.backward()
             self.optimizer.step()
             if epoch % 10 == 0:
