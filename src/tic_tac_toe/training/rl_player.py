@@ -2,4 +2,7 @@
 
 class TicTacToePlayer:
     def __init__(self):
-        pass
+        self.name = ""
+
+    def get_state(self, grid):
+        return ""

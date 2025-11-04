@@ -27,6 +27,7 @@ class TicTacToeEnv:
             invalid_move = True
             while invalid_move:
                 try:
+                    self.board.display()
                     print("Choose your next move.")
                     print(self.board.get_available_moves())
                     row = int(input("Enter the selected row: "))
@@ -52,7 +53,7 @@ class TicTacToeEnv:
             print(f"The winner is player {1 if current_player == 2 else 2}.")
         if is_draw:
             print("No winner - it's a draw!")
-            episode_history.append("winner": 0)
+            episode_history.append({"winner": 0})
         return episode_history
 
     def run_game_one_player(self, player_starts: bool):
@@ -73,7 +74,7 @@ class TicTacToeEnv:
                 try:
                     print("Choose your move.")
                     print(self.board.get_available_moves())
-                    print(self.board.display())
+                    self.board.display()
                     row = int(input("Enter the selected row: "))
                     col = int(input("Enter the selected column: "))
                     game_over = self.board.make_move(current_player, row, col)
@@ -116,7 +117,7 @@ class TicTacToeEnv:
                     episode_history.append({"winner": current_player})
             current_player = 1 if current_player == 2 else 2
             print(f"AI player played {row},{col}.")
-            print(self.board.display())
+            self.board.display()
             if game_over:
                 break
 
@@ -154,7 +155,7 @@ class TicTacToeEnv:
             print(f"The winner is player {1 if current_player == 2 else 2}.")
         if is_draw:
             print("No winners - it's a draw!")
-            episode_history.append("Winner": 0)
+            episode_history.append({"winner": 0})
         return episode_history
 
     def simulate_game(self):
