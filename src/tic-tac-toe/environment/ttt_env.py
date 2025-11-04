@@ -1,7 +1,8 @@
 import numpy as np
 
 class TicTacToe:
-    pass
+    def __init__(self, ai_player: TicTacToePlayer) -> None:
+        self.board = Board()
 
 class Board:
     def __init__(self) -> None:
@@ -30,6 +31,12 @@ class Board:
 
     # End game checks
 
+    def check_draw(self) -> bool:
+        """
+            Checks if all grid cells are non-zero and so the match is over.
+        """
+        return np.all(self.grid != 0)
+
     def check_win(self, player: int) -> bool:
         """ 
             Checks if a player has won the game.
@@ -42,63 +49,41 @@ class Board:
         """
         if player not in [1, 2]:
             raise ValueError("Player number must be 1 or 2.")
-        if len(np.argwhere(self.grid, player)) < 3:
+        # Check enough moves have been played for a win.
+        if len(np.argwhere(self.grid == player)) < 3:
             return False
-        if self.check_win_horizontal(player):
-            return True
-        if self.check_win_vertical(player):
-            return True
-        if self.check_win_diagonal(player):
-            return True
-        return False
+        # Check each direction for a win.
+        return (
+            self.check_win_horizontal(player):
+            or self.check_win_vertical(player):
+            or self.check_win_diagonal(player):
+        )
 
     def check_win_horizontal(self, player: int) -> bool:
         """
             Checks if any row of the playing grid is a winning row (i.e. all the same) for the given player.
-
-            Args:
-                player (int): restricted to 0 or 1 for the two players.
-
-            Returns:
-                True if a winning row is found for the player. False if no winning row is found.
         """
-        if player not in [0, 1]:
-            raise ValueError("Player number must be 0 or 1.")
-        for i in range(3):
-            if np.all(self.grid[i] == player):
-                return True
-        return False
+        return np.any(np.all(self.grid == player, axis=1))
     
     def check_win_vertical(self, player: int) -> bool:
         """
             Checks if any column of the playing grid is a winning column (i.e. all the same) for the given player.
-
-            Args:
-                player (int): restricted to 0 or 1 for the two players.
-
-            Returns:
-                True if a winning column is found for the player. False if no winning column is found.
         """
-        for i in range(3):
-            if [self.grid[0][i], self.grid[1][i], self.grid[2][i]] == [player] * 3:
-                return True
-        return False
-
+        return np.any(np.all(self.grid == player, axis=0))
 
     def check_win_diagonal(self, player: int) -> bool:
         """
             Checks if either diagonal of the playing grid is a winning line (i.e. all the same) for the given player.
-
-            Args:
-                player (int): restricted to 0 or 1 for the two players.
-
-            Returns:
-                True if a winning diagonal is found for the player. False if no winning diagonal is found.
         """
-        if player not in [0, 1]:
-            raise ValueError("Player number must be 0 or 1.")
-        if [self.grid[0][0], self.grid[1][1], self.grid[2][2]] == [player] * 3:
-            return True
-        if [self.grid[0][2], self.grid[1][1], self.grid[2][0]] == [player] * 3:
-            return True
-        return False
+        return (
+            np.all(np.diag(self.grid) == player)
+            or np.all(np.diag(np.fliplr(self.grid)) == player)
+        )
+
+    # General methods
+
+    def display(self):
+        print("\n".join(" ".join(str(x) for x in row) for row in self.grid))
+
+    def reset(self):
+        self.grid.fill(0)
