@@ -5,7 +5,8 @@ from environment.target_env_single import BattleshipsEnv
 
 
 def train_single_shot(player: RLPlayer, total_games: int = 5000, num_targets: int = 10,
-                      save_interval: int = 100, log_interval: int = 10, verbose: bool = True):
+                      save_interval: int = 100, log_interval: int = 10, verbose: bool = True, 
+                      print_stats: bool = False):
     """
     Trains a single-shot RLPlayer on BattleshipsEnv.
     
@@ -20,7 +21,7 @@ def train_single_shot(player: RLPlayer, total_games: int = 5000, num_targets: in
     Returns:
         The trained RLPlayer.
     """
-    env = BattleshipsEnv(player, num_targets, print_stats=False)
+    env = BattleshipsEnv(player, num_targets, print_stats=print_stats)
 
     all_rewards = []
     all_accuracies = []

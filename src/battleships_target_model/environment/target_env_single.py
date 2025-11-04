@@ -9,7 +9,7 @@ class BattleshipsEnv:
         self.REWARD_WEIGHTS = {
             'hit_adjacent_shot': 2.0,
             'hit_inline_shot': 3.0,
-            'untargeted_shot': -1.0,
+            'untargeted_shot': -0.1,
             'invalid': -10.0
         }
         self.ADJACENT_DELTAS = [-1, 1]
@@ -82,7 +82,7 @@ class BattleshipsEnv:
             state = next_state
             row, col, log_probs = self.player.choose_action(state)
             reward = self.process_shot(row, col)
-            done = len(episode_history) == 0
+            done = len(episode_history) == 4
             next_state = self.player.get_state(self.grid, self.hit_adjacent_cells, self.hit_inline_cells)
             episode_history.append({
                 'state': state,

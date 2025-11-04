@@ -48,7 +48,7 @@ class RLPlayer:
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.epsilon = epsilon
         self.epsilon_min = 0.05
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.9995
         self.grid_size = grid_size
         self.lr = lr
 

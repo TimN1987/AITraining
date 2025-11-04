@@ -46,6 +46,15 @@ def prompt_choice(prompt: str, choices: list, default: str) -> str:
             return val
         print(f"Invalid choice. Enter one of: {choices_str}")
 
+def prompt_bool(prompt: str, default: bool) -> bool:
+    while True:
+        val = input(f"{prompt} [{default}]: ").strip().lower()
+        if not val:
+            return default
+        if val in ['y', 'yes', 'n', 'no']:
+            return (val == 'y') or (val == 'yes')
+        print(f"Invalid choice. Enter one of: y, yes, n, no")
+
 
 # -------------------------------
 # Main program
@@ -69,6 +78,7 @@ def main():
     num_targets = prompt_int("Number of targets per game", default_num_targets)
     lr = prompt_float("Learning rate", default_lr)
     epsilon = prompt_float("Initial exploration rate (epsilon)", default_epsilon)
+    print_stats = prompt_bool("Print detailed stats (y/n)?", False)
 
     # Confirm
     print("\nTraining Configuration:")
@@ -89,7 +99,7 @@ def main():
 
     # Start training
     if training_type == "single":
-        player = train_single_shot(player, total_games=total_games, num_targets=num_targets)
+        player = train_single_shot(player, total_games=total_games, num_targets=num_targets, print_stats=print_stats)
 
     print("\nTraining complete. Model saved.")
 
