@@ -84,6 +84,7 @@ class TicTacToeEnv:
                         "state": state,
                         "row": row,
                         "column": col,
+                        "log_prob": None,
                         "turn_count": turn_count,
                         "next_state": next_state,
                         "game_over": game_over
@@ -101,7 +102,7 @@ class TicTacToeEnv:
                 break
             turn_count += 1
             state = next_state
-            row, col = self.player.choose_action(state, current_player)
+            row, col, log_prob = self.player.choose_action(state, current_player)
             game_over = self.board.make_move(current_player, row, col)
             next_state = self.player.get_state(self.board.grid)
             episode_history.append({
@@ -109,6 +110,7 @@ class TicTacToeEnv:
                         "state": state,
                         "row": row,
                         "column": col,
+                        "log_prob": log_prob,
                         "turn_count": turn_count,
                         "next_state": next_state,
                         "game_over": game_over
@@ -141,6 +143,7 @@ class TicTacToeEnv:
                         "state": state,
                         "row": row,
                         "column": col,
+                        "log_prob": None,
                         "turn_count": turn_count,
                         "next_state": next_state,
                         "game_over": game_over
@@ -169,7 +172,7 @@ class TicTacToeEnv:
                 break
             turn_count += 1
             state = next_state
-            row, col = self.player.choose_action(state, current_player) if current_player == 1 else self.opponent.choose_action(state, current_player)
+            row, col, log_prob = self.player.choose_action(state, current_player) if current_player == 1 else self.opponent.choose_action(state, current_player)
             game_over = self.board.make_move(current_player, row, col)
             next_state = self.player.get_state(self.board.grid)
             episode_history.append({
@@ -177,6 +180,7 @@ class TicTacToeEnv:
                         "state": state,
                         "row": row,
                         "column": col,
+                        "log_prob": log_prob,
                         "turn_count": turn_count,
                         "next_state": next_state,
                         "game_over": game_over
