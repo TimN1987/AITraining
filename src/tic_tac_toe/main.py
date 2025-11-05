@@ -53,8 +53,7 @@ def train_model(episodes: int, lr: float, save_interval: int = 1000):
     player.load()
     env = TicTacToeEnv(player, player)
 
-    win_counts = {1: 0, -1: 0, 0: 0}
-    total_rewards = []
+    win_counts = {1: 0, 2: 0, 0: 0}
     start_time = time.time()
 
     for i in range(1, episodes + 1):
@@ -62,27 +61,21 @@ def train_model(episodes: int, lr: float, save_interval: int = 1000):
         episode_history = env.simulate_game()
         player.learn_from_game(episode_history)
 
-        # Collect reward stats
-        total_reward = sum(step["reward"] for step in episode_history if step["reward"] is not None)
-        total_rewards.append(total_reward)
-
-        # Determine winner
         winner = episode_history[-1]["winner"]
         win_counts[winner] = win_counts.get(winner, 0) + 1
 
         # Show stats periodically
         if i % 100 == 0:
-            avg_reward = sum(total_rewards[-100:]) / 100
             total_games = sum(win_counts.values())
-            win_rate = (win_counts[1] / total_games) * 100 if total_games else 0
+            p1_win_rate = (win_counts[1] / total_games) * 100 if total_games else 0
             draw_rate = (win_counts[0] / total_games) * 100 if total_games else 0
-            loss_rate = (win_counts[-1] / total_games) * 100 if total_games else 0
+            p2_win_rate = (win_counts[2] / total_games) * 100 if total_games else 0
             elapsed = time.time() - start_time
 
             print(
                 f"Episode {i}/{episodes} | "
-                f"Win: {win_rate:.1f}% | Draw: {draw_rate:.1f}% | Loss: {loss_rate:.1f}% | "
-                f"Avg Reward: {avg_reward:.3f} | Elapsed: {elapsed:.1f}s"
+                f"Player 1 win: {p1_win_rate:.1f}% | Draw: {draw_rate:.1f}% | Player 2 win: {p2_win_rate:.1f}% | "
+                f"Elapsed: {elapsed:.1f}s"
             )
 
         if i % save_interval == 0:
@@ -102,7 +95,6 @@ def train_single_player(episodes: int, lr: float, save_interval: int = 1000):
     env = TicTacToeEnv(player, None)
 
     win_counts = {1: 0, -1: 0, 0: 0}
-    total_rewards = []
 
     for i in range(1, episodes + 1):
         env.reset()
@@ -112,22 +104,17 @@ def train_single_player(episodes: int, lr: float, save_interval: int = 1000):
         episode_history = env.run_game_one_player(player_starts)
         player.learn_from_game(episode_history)
 
-        total_reward = sum(step["reward"] for step in episode_history if step["reward"] is not None)
-        total_rewards.append(total_reward)
-
         winner = episode_history[-1]["winner"]
         win_counts[winner] = win_counts.get(winner, 0) + 1
 
         if i % 100 == 0:
-            avg_reward = sum(total_rewards[-100:]) / 100
             total_games = sum(win_counts.values())
-            win_rate = (win_counts[1] / total_games) * 100
+            p1_win_rate = (win_counts[1] / total_games) * 100
             draw_rate = (win_counts[0] / total_games) * 100
-            loss_rate = (win_counts[-1] / total_games) * 100
+            p2_win_rate = (win_counts[2] / total_games) * 100
             print(
                 f"Episode {i}/{episodes} | "
-                f"Win: {win_rate:.1f}% | Draw: {draw_rate:.1f}% | Loss: {loss_rate:.1f}% | "
-                f"Avg Reward: {avg_reward:.3f}"
+                f"Player 1 win: {p1_win_rate:.1f}% | Draw: {draw_rate:.1f}% | Player 2 win: {p2_win_rate:.1f}% | "
             )
 
         if i % save_interval == 0:

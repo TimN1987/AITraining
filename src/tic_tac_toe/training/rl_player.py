@@ -11,11 +11,11 @@ class NeuralNetwork(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(3, 32, 3, 1),
             nn.ReLU(),
-            nn.Conv2d(32, 64, 3, 1),
+            nn.Conv2d(32, 64, 1, 1),
             nn.ReLU()
         )
         self.fc = nn.Sequential(
-            nn.Linear(64 * 3 * 3, 128),
+            nn.Linear(64, 128),
             nn.ReLU()
         )
         self.policy_head = nn.Sequential(
