@@ -47,9 +47,9 @@ def prompt_bool(prompt: str, default: bool) -> bool:
 
 # Training loops
 
-def train_model(episodes: int, lr: float, save_interval: int = 1000):
+def train_model(episodes: int, lr: float, epsilon: float, save_interval: int = 1000):
     print("\nStarting training...")
-    player = TicTacToePlayer(lr)
+    player = TicTacToePlayer(lr, epsilon)
     player.load()
     env = TicTacToeEnv(player, player)
 
@@ -87,10 +87,10 @@ def train_model(episodes: int, lr: float, save_interval: int = 1000):
     print(f"Final win rate (vs self): {(win_counts[1] / episodes) * 100:.1f}%\n")
 
 
-def train_single_player(episodes: int, lr: float, save_interval: int = 1000):
+def train_single_player(episodes: int, lr: float, epsilon: float, save_interval: int = 1000):
     print("\nStarting single-player training... (AI vs Player)")
     rnd = random.Random()
-    player = TicTacToePlayer(lr)
+    player = TicTacToePlayer(lr, epsilon)
     player.load()
     env = TicTacToeEnv(player, player)
     player_starts = rnd.choice([True, False])
@@ -166,10 +166,11 @@ def main():
             training_type = prompt_choice("Human or AI trainer? ", ["human", "AI"], "AI")
             episodes = prompt_int("Enter number of training games", 5000)
             lr = prompt_float("Enter learning rate", 0.0001)
+            epsilon = prompt_float("Enter epsilon value", 0.2)
             if training_type == "AI" or training_type == "ai":
-                train_model(episodes, lr)
+                train_model(episodes, lr, epsilon)
             else:
-                train_single_player(episodes, lr)
+                train_single_player(episodes, lr, epsilon)
         elif choice == 2:
             play_one_player()
         elif choice == 3:

@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.distributions import Categorical
 import numpy as np
 from pathlib import Path
+from random import Random
 
 class NeuralNetwork(nn.Module):
     def __init__(self):
@@ -30,10 +31,16 @@ class NeuralNetwork(nn.Module):
         return self.policy_head(x)
 
 class TicTacToePlayer:
-    def __init__(self, lr=0.0001):
+    def __init__(self, lr=0.0001, epsilon=0.2):
         self.policy = NeuralNetwork()
         self.lr = lr
+        self.epsilon = epsilon
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
+        self.rnd = Random()
+
+    def decay_epsilon(self):
+        if self.epsilon > 0:
+            self.epsilon = max(0.05, self.epsilon ** 0.9995)
 
     def get_state(self, game_grid: np.array):
         """
@@ -51,6 +58,10 @@ class TicTacToePlayer:
     def choose_action(self, state, player):
         available_mask = state[0] == 1
         available_positions = torch.nonzero(available_mask, as_tuple=False)
+
+        if self.rnd.random() < self.epsilon:
+            row, col = self.rnd.choice(available_positions)
+            return row, col, None
 
         self.policy.train()
         pos_logits = self.policy(state.unsqueeze(0)).squeeze(0)
@@ -77,23 +88,28 @@ class TicTacToePlayer:
     
     def learn_from_game(self, episode_history):
         player_one_history, player_two_history, winner = self.separate_episode_history(episode_history)
-    
-        rewards_p1 = self.assign_rewards(player_one_history, winner = winner, player = 1)
-        rewards_p2 = self.assign_rewards(player_two_history, winner = winner, player = 2)
+
+        rewards_p1 = self.assign_rewards(player_one_history, winner=winner, player=1)
+        rewards_p2 = self.assign_rewards(player_two_history, winner=winner, player=2)
 
         all_transitions = player_one_history + player_two_history
         all_rewards = rewards_p1 + rewards_p2
 
-        policy_loss = 0
+        policy_losses = []
+
         for transition, reward in zip(all_transitions, all_rewards):
             log_prob = transition["log_prob"]
-            if log_prob == None:
-                continue
-            policy_loss += -log_prob * reward
+            if log_prob is not None:
+                policy_losses.append(-log_prob * reward)
 
-        self.optimizer.zero_grad()
-        policy_loss.backward()
-        self.optimizer.step()
+        if policy_losses:
+            policy_loss = torch.stack(policy_losses).sum()
+            self.optimizer.zero_grad()
+            policy_loss.backward()
+            self.optimizer.step()
+            self.decay_epsilon()
+        else:
+            pass
 
     # Saving and loading
 
