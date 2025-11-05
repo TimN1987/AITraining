@@ -93,6 +93,7 @@ def train_single_player(episodes: int, lr: float, save_interval: int = 1000):
     player = TicTacToePlayer(lr)
     player.load()
     env = TicTacToeEnv(player, player)
+    player_starts = rnd.choice([True, False])
 
     win_counts = {1: 0, -1: 0, 0: 0}
 
@@ -100,14 +101,14 @@ def train_single_player(episodes: int, lr: float, save_interval: int = 1000):
         env.reset()
 
         # Play a full game with random opponent
-        player_starts = rnd.choice([True, False])
+        player_starts = not player_starts
         episode_history = env.run_game_one_player(player_starts)
         player.learn_from_game(episode_history)
 
         winner = episode_history[-1]["winner"]
         win_counts[winner] = win_counts.get(winner, 0) + 1
 
-        if i % 100 == 0:
+        if i % 10 == 0:
             total_games = sum(win_counts.values())
             p1_win_rate = (win_counts[1] / total_games) * 100
             draw_rate = (win_counts[0] / total_games) * 100
@@ -117,7 +118,7 @@ def train_single_player(episodes: int, lr: float, save_interval: int = 1000):
                 f"Player 1 win: {p1_win_rate:.1f}% | Draw: {draw_rate:.1f}% | Player 2 win: {p2_win_rate:.1f}% | "
             )
 
-        if i % save_interval == 0:
+        if i % 10 == 0:
             player.save()
 
     player.save()
@@ -162,7 +163,7 @@ def main():
     while True:
         choice = prompt_int("Enter your choice (1-3)", 1)
         if choice == 1:
-            training_type = prompt_choice("Human or AI trainer? ", ["human, AI"], "AI")
+            training_type = prompt_choice("Human or AI trainer? ", ["human", "AI"], "AI")
             episodes = prompt_int("Enter number of training games", 5000)
             lr = prompt_float("Enter learning rate", 0.0001)
             if training_type == "AI" or training_type == "ai":
