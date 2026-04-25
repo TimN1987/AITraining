@@ -1,11 +1,13 @@
 import numpy as np
+from agent import RLPlayer
 
 class TargetEnv:
-    def __init__(self):
+    def __init__(self, ai_player: RLPlayer):
         self.REWARDS = {
             'invalid': -50,
             'perfect': 50
         }
+        self.player = ai_player
         self.grid = np.zeros((10, 10), dtype=np.int32)
         self.available = np.argwhere(self.grid == 0)
         self.hit = self.available[np.random.choice(len(self.available))]
@@ -23,22 +25,41 @@ class TargetEnv:
         idx = np.random.choice(len(self.available))
         self.hit = self.available[idx]
         self.grid[self.hit] = 1
-        np.delete(self.available, idx)
+        self.available = np.delete(self.available, idx, axis=0)
 
     def place_misses(self):
-        total_hits = np.random.choice(20)
+        total_hits = np.random.choice(0, 20)
         for _ in range(total_hits):
             idx = np.random.choice(len(self.available))
             self.grid[self.available[idx]] = -1
-            np.delete(self.available, idx)
+            self.available = np.delete(self.available, idx, axis=0)
 
     # Running game
 
+    def run_episode(self):
+        state = self.player.get_state(self.grid)
+        action_idx, log_probs = self.player.choose_action(state, self.available)
+        pos_idx = action_idx % 100
+
+        row, col = divmod(pos_idx, 10)
+        reward = self.calculate_reward(row, col)
+
+        episode_history = {
+            'state': state,
+            'action': action_idx,
+            'reward': reward,
+            'log_probs': log_probs
+        }
+
+        print(f"Puzzle Shot: target {self.hit}, hit ({row},{col}) -> reward {reward:+.2f}")
+
+        return episode_history
+
     # Calculate rewards
 
-    def calculate_reward(self, pos):
-        if self.grid[pos] == -1:
+    def calculate_reward(self, row: int, col: int) -> int:
+        if self.grid[(row, col)] in [-1, 1]:
             return self.REWARDS['invalid']
-        row_pos, col_pos = pos
         row_hit, col_hit = self.hit
-        return self.REWARDS['perfect'] - 5 * (abs(row_pos, row_hit) + abs(col_pos, col_hit))
+        dist = abs(row - row_hit) + abs(col - col_hit)
+        return self.REWARDS['perfect'] - 5 * (dist - 1)
