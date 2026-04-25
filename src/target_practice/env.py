@@ -24,14 +24,14 @@ class TargetEnv:
     def place_hit(self):
         idx = np.random.choice(len(self.available))
         self.hit = self.available[idx]
-        self.grid[self.hit] = 1
+        self.grid[tuple(self.hit)] = 1
         self.available = np.delete(self.available, idx, axis=0)
 
     def place_misses(self):
         total_hits = np.random.choice(np.arange(21))
         for _ in range(total_hits):
             idx = np.random.choice(len(self.available))
-            self.grid[self.available[idx]] = -1
+            self.grid[tuple(self.available[idx])] = -1
             self.available = np.delete(self.available, idx, axis=0)
 
     # Running game
@@ -63,4 +63,4 @@ class TargetEnv:
             return self.REWARDS['invalid']
         row_hit, col_hit = self.hit
         dist = abs(row - row_hit) + abs(col - col_hit)
-        return self.REWARDS['perfect'] - dist + 1
+        return self.REWARDS['perfect'] - (dist ** 2) // 5 + 1

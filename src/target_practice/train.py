@@ -114,5 +114,5 @@ if __name__ == "__main__":
     print("Welcome to the target practice model trainer.")
     num_episodes = safe_int("How many episodes would you like to run?", default=5000)
     lr = safe_float("Enter the learning rate.", min=1e-5, max=1e-4, default=1e-4)
-    epsilon = safe_float("Enter the epsilon value for exploration.", min=0.5, max=1, default=0.2)
+    epsilon = safe_float("Enter the epsilon value for exploration.", min=0.05, max=1, default=0.2)
     train(num_episodes, lr, epsilon)
