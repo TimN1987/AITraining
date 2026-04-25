@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
+from model import BattleshipTargetCNN 
 
 class RLPlayer:
     def __init__(self, grid_size=10, lr=1e-4, epsilon=0.2, device=None):
@@ -24,13 +25,12 @@ class RLPlayer:
         # Exploration Parameters
         self.epsilon = epsilon
         self.epsilon_min = 0.05
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.9
         self.lr = lr
 
         # Neural Network Initialization
         # We assume BattleshipTargetCNN is imported or defined in model.py
         # Output is 400 (100 per shot type: Single, AirUp, AirDown, Bombard)
-        from model import BattleshipTargetCNN 
         self.policy = BattleshipTargetCNN(input_channels=6, num_actions=400).to(self.device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.lr)
 
@@ -132,33 +132,27 @@ class RLPlayer:
 
         return action_idx, log_prob
     
-    def learn(self, episode_history):
-        if not episode_history:
-            return
+    def learn(self, entry):
+        if not entry:
+            return 0
 
         self.policy.train()
         self.optimizer.zero_grad()
-        
-        policy_loss = []
-        
-        for entry in episode_history:
-            state = entry['state']
-            mask = entry['mask']
-            action_idx = entry['action']
-            reward = entry['reward']
+    
+        state_tensor, action_mask = entry['state']
+        action_idx = entry['action']
+        reward = entry['reward']
 
-            logits = self.policy(state).squeeze(0)
-            masked_logits = logits.masked_fill(mask == 0, float('-inf'))
-            probs = F.softmax(masked_logits, dim=-1)
+        logits = self.policy(state_tensor).squeeze(0)
 
-            log_prob = torch.log(probs[action_idx] + 1e-10)
-            
-            policy_loss.append(-log_prob * reward)
+        masked_logits = logits.masked_fill(action_mask == 0, float('-inf'))
+        probs = F.softmax(masked_logits, dim=-1)
 
-        total_loss = torch.stack(policy_loss).mean()
-        total_loss.backward()
-        
+        log_prob = torch.log(probs[action_idx] + 1e-10)
+        loss = -log_prob * reward  # Negative log likelihood * reward
+
+        loss.backward()
         torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
         self.optimizer.step()
 
-        return total_loss.item()
+        return loss.item()
