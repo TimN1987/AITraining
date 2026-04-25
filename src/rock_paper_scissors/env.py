@@ -17,7 +17,7 @@ class RPSEnv:
         self.player = ai_player
         self.random = random.Random()
 
-    def play_game(self):
+    def run_episode(self):
         player_move = random.choice(self.moves)
         state = self.player.get_state(player_move)
         ai_move = self.player.choose_action(state)
@@ -28,6 +28,7 @@ class RPSEnv:
                 'ai move': ai_move,
                 'reward': reward
         }
+        print(f'Player: {player_move} -v- AI: {ai_move}. Reward: {reward}.')
         return episode_history
     
     def calculate_reward(self, player_move, ai_move):

@@ -21,36 +21,63 @@ class QNetwork(nn.Module):
         return self.network(x)
 
 class RLPlayer:
-    def __init__(self):
-        self.model = QNetwork()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.01)
+    def __init__(self, lr=0.01, epsilon=0.1, batch_size=32):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.policy = QNetwork().to(self.device)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
         self.criterion = nn.MSELoss()
         self.moves = ['rock', 'paper', 'scissors']
-        self.gamma = 0.9
+
+        self.lr = lr
+        self.epsilon = epsilon
+        self.decay_ratio = 0.95
+
+        self.memory = []
+        self.memory_limit = 2000
+        self.batch_size = batch_size
 
     def get_state(self, move):
         move_idx = self.moves.index(move)
-        return nn.functional.one_hot(torch.tensor(move_idx), num_classes=3).float()
-
-    def choose_action(self, state, epsilon=0.1):
-        if random.random() < epsilon:
+        return nn.functional.one_hot(torch.tensor(move_idx), num_classes=3).float().to(self.device)
+    
+    def choose_action(self, state):
+        if random.random() < self.epsilon:
             return random.choice(self.moves)
         
         with torch.no_grad():
-            q_values = self.model(state)
-            return self.moves[torch.argmax(q_values).item()]
+            if state.dim() == 1:
+                state = state.unsqueeze(0)
+            
+            q_values = self.policy(state)
+            action_idx = torch.argmax(q_values).item()
+            return self.moves[action_idx]
 
-    def train(self, history):
-        state = history['state']
-        action_idx = self.moves.index(history['ai move'])
-        reward = history['reward']
+    def store_experience(self, history):
+        self.memory.append(history)
+        if len(self.memory) > self.memory_limit:
+            self.memory.pop(0)
 
-        current_q = self.model(state)[action_idx]
+    def learn(self):
+        if len(self.memory) < self.batch_size:
+            return None
 
-        target_q = torch.tensor(float(reward))
+        batch = random.sample(self.memory, self.batch_size)
 
-        loss = self.criterion(current_q, target_q)
-        
+        states = torch.stack([b['state'] for b in batch]).to(self.device)
+        actions = torch.tensor([self.moves.index(b['ai move']) for b in batch]).to(self.device)
+        rewards = torch.tensor([float(b['reward']) for b in batch]).to(self.device)
+
+        all_q_values = self.policy(states) 
+ 
+        current_q = all_q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
+
+        loss = self.criterion(current_q, rewards)
+
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+        return loss.item()
+    
+    def decay_epsilon(self):
+        self.epsilon = max(0.05, self.epsilon * self.decay_ratio)
