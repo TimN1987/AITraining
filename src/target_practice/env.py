@@ -4,8 +4,8 @@ from agent import RLPlayer
 class TargetEnv:
     def __init__(self, ai_player: RLPlayer):
         self.REWARDS = {
-            'invalid': -50,
-            'perfect': 50
+            'invalid': -10,
+            'perfect': 10
         }
         self.player = ai_player
         self.grid = np.zeros((10, 10), dtype=np.int32)
@@ -28,7 +28,7 @@ class TargetEnv:
         self.available = np.delete(self.available, idx, axis=0)
 
     def place_misses(self):
-        total_hits = np.random.choice(0, 20)
+        total_hits = np.random.choice(np.arange(21))
         for _ in range(total_hits):
             idx = np.random.choice(len(self.available))
             self.grid[self.available[idx]] = -1
@@ -37,8 +37,9 @@ class TargetEnv:
     # Running game
 
     def run_episode(self):
+        self.reset()
         state = self.player.get_state(self.grid)
-        action_idx, log_probs = self.player.choose_action(state, self.available)
+        action_idx, log_probs = self.player.choose_action(state)
         pos_idx = action_idx % 100
 
         row, col = divmod(pos_idx, 10)
@@ -62,4 +63,4 @@ class TargetEnv:
             return self.REWARDS['invalid']
         row_hit, col_hit = self.hit
         dist = abs(row - row_hit) + abs(col - col_hit)
-        return self.REWARDS['perfect'] - 5 * (dist - 1)
+        return self.REWARDS['perfect'] - dist + 1

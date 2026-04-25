@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-import os  # Required for the file check
+import os
 from env import TargetEnv
 from agent import RLPlayer
 import matplotlib.pyplot as plt
@@ -9,7 +9,6 @@ def train(num_episodes=5000, lr=1e-4, epsilon=0.2, device=None):
     player = RLPlayer(lr, epsilon, device)
     env = TargetEnv(player)
     
-    num_episodes = 5000
     save_interval = min(500, num_episodes)
     model_path = "target_practice_model.pth"
     
@@ -88,7 +87,7 @@ def safe_int(message, invalid_message="Enter a valid integer value.", min=0, max
         return default
     try:
         output = int(value)
-        if value < min or value > max:
+        if output < min or output > max:
             print(f"Enter a value between {min} and {max}.")
             return safe_int(message, invalid_message, min, max, default)
         return output
@@ -96,14 +95,14 @@ def safe_int(message, invalid_message="Enter a valid integer value.", min=0, max
         print(invalid_message)
         return safe_int(message, invalid_message, min, max, default)
 
-def safe_float(message, invalid_message="Enter a valid integer value.", min=0, max=1000000, default=0):
+def safe_float(message, invalid_message="Enter a valid decimal value.", min=0, max=1000000, default=0):
     print(message)
     value = input()
     if value == "":
         return default
     try:
-        output = int(value)
-        if value < min or value > max:
+        output = float(value)
+        if output < min or output > max:
             print(f"Enter a value between {min} and {max}.")
             return safe_float(message, invalid_message, min, max, default)
         return output
@@ -114,6 +113,6 @@ def safe_float(message, invalid_message="Enter a valid integer value.", min=0, m
 if __name__ == "__main__":
     print("Welcome to the target practice model trainer.")
     num_episodes = safe_int("How many episodes would you like to run?", default=5000)
-    lr = safe_float("Enter the learning rate.", min=1e-5, max=5e-3, default=1e-4)
+    lr = safe_float("Enter the learning rate.", min=1e-5, max=1e-4, default=1e-4)
     epsilon = safe_float("Enter the epsilon value for exploration.", min=0.5, max=1, default=0.2)
     train(num_episodes, lr, epsilon)
