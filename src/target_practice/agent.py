@@ -45,8 +45,6 @@ class RLPlayer:
 
         return state_tensor, action_mask
 
-    import torch.nn.functional as F
-
     def choose_action(self, state_tuple):
         state, mask = state_tuple
         self.policy.eval()
