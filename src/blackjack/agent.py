@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import random
 
-class BJNetwork(nn.module):
+class BJNetwork(nn.Module):
     def __init__(self):
         super().__init__()
         self.network = nn.Sequential(

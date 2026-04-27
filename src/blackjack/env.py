@@ -61,7 +61,7 @@ class BlackJackEnv:
                 {
                     'state': state,
                     'score': self.score,
-                    'action': action,
+                    'ai move': action,
                     'game_over': self.game_over,
                     'reward': reward
                 }
