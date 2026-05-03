@@ -5,9 +5,9 @@ class BlackJackEnv:
     def __init__(self, ai_player: RLPlayer):
         self.REWARDS = {
             'blackjack': 10,
-            'safe twist': 1,
-            'bad twist': -1,
-            'low stick': -1,
+            'safe twist': 5,
+            'bad twist': 0,
+            'low stick': -5,
             'high stick': 1
         }
         self.TARGET = 21
@@ -105,7 +105,7 @@ class BlackJackEnv:
             if self.score == self.TARGET:
                 reward += self.REWARDS['blackjack']
             elif self.score < self.TARGET:
-                reward += self.REWARDS['blackjack'] - (self.TARGET - self.score)
+                reward += self.REWARDS['blackjack'] - 5 * (self.TARGET - self.score)
             else:
-                reward -= 2 * (self.score - self.TARGET)
+                reward -= 0 * (self.score - self.TARGET)
         return reward

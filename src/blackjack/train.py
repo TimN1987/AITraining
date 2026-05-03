@@ -6,7 +6,7 @@ from env import BlackJackEnv
 from agent import RLPlayer
 
 # --- Configuration ---
-MODEL_PATH = "bj_ai_model.pth"
+MODEL_PATH = "bj_agg_ai_model.pth"
 SAVE_INTERVAL = 500  # Save every 500 episodes
 
 def train(num_episodes, lr=0.01):

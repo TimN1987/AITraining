@@ -3,7 +3,7 @@ import os
 from agent import RLPlayer
 from env import BlackJackEnv
 
-MODEL_PATH = "bj_ai_model.pth"
+MODEL_PATH = "bj_agg_ai_model.pth"
 PLAYER = RLPlayer()
 ENV = BlackJackEnv(PLAYER)
 
@@ -37,11 +37,11 @@ def play():
 if __name__ == "__main__":
     try:
         print("Welcome to the AI blackjack experience!")
-        choice = input("What would you like to do?\n1. Play\n2. Exit")
+        choice = input("What would you like to do?\n1. Play\n2. Exit\n")
         while choice == '1':
-            games = int(input("How many games would you like to play?"))
+            games = int(input("How many games would you like to play?\n"))
             for _ in range(games):
                 play()
-            choice = input("What would you like to do?\n1. Play\n2. Exit")
+            choice = input("What would you like to do?\n1. Play\n2. Exit\n")
     except KeyboardInterrupt:
         print("\nTraining interrupted by user.")
