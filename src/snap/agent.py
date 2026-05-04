@@ -35,8 +35,9 @@ class RLPlayer:
         self.memory_limit = 2000
         self.batch_size = batch_size
 
-    def get_state(self, score):
-        return torch.tensor([score], dtype=torch.float32).to(self.device)
+    def get_state(self, prev, curr):
+        s = torch.tensor([ord(prev)/100.0, ord(curr)/100.0], dtype=torch.float32)
+        return s.to(self.device)
     
     def choose_action(self, state):
         if random.random() < self.epsilon:
