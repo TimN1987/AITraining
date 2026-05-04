@@ -14,16 +14,22 @@ if os.path.exists(MODEL_PATH):
 
 def play():
     ENV.reset()
+    correct_actions, total_turns = 0, 0
     print('GAME STARTING!!!')
     prev = ENV.player_hand.pop()
     while len(ENV.player_hand) > 0:
+        total_turns += 1
         curr = ENV.player_hand.pop()
         state = PLAYER.get_state(prev, curr)
         action = PLAYER.choose_action(state)
         print(f'The previous card was {prev}. The current card is {curr}.')
-        print(f'The AI player chose {'snap' if action else 'not snap'}.')
+        print(f'The AI player chose {"snap" if action else "not snap"}.')
+        if (prev == curr) == action:
+            correct_actions += 1
         prev = curr
     print('GAME OVER!!!')
+    accuracy = correct_actions / total_turns * 100
+    print(f'AI accuracy: {accuracy:.1f}%')
 
 
 if __name__ == "__main__":
