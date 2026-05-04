@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from env import SnapEnv
 from agent import RLPlayer
 
-MODEL_PATH = "bj_agg_ai_model.pth"
+MODEL_PATH = "snap_ai_model.pth"
 SAVE_INTERVAL = 500
 
 def train(num_episodes, lr=0.01):
