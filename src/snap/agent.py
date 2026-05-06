@@ -36,7 +36,7 @@ class RLPlayer:
         self.batch_size = batch_size
 
     def get_state(self, prev, curr):
-        s = torch.tensor([ord(prev)/100.0, ord(curr)/100.0], dtype=torch.float32)
+        s = torch.tensor([(ord(prev) - ord('A'))/26.0, (ord(curr) - ord('A'))/26.0], dtype=torch.float32)
         return s.to(self.device)
     
     def choose_action(self, state):

@@ -5,9 +5,10 @@ class SnapEnv:
     def __init__(self, ai_player: RLPlayer):
         self.REWARDS = {
             True: 10,
-            False: -10
+            False: -10,
+            'snap': 10
         }
-        self.CARDS = 'ABCDEFGH'
+        self.CARDS = 'ABCDE'
         self.CARD_COUNT = 4
 
         self.player = ai_player
@@ -22,7 +23,6 @@ class SnapEnv:
 
     def run_episode(self):
         self.reset()
-        game_over = False
         episode_history = []
         prev = self.player_hand.pop()
         while len(self.player_hand) > 0:
@@ -41,4 +41,5 @@ class SnapEnv:
         return episode_history
     
     def calculate_reward(self, prev: str, curr: str, choice: bool):
-        return self.REWARDS[(prev == curr) == choice]
+        reward = self.REWARDS[(prev == curr) == choice]
+        return reward
